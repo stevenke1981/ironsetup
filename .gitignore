@@ -1,0 +1,13 @@
+/target/
+/dist/
+/bin/
+/samples/
+/release/
+/target-*/
+/third-party/
+/evidence/tmp/
+__pycache__/
+*.py[cod]
+*.ispkg
+*.exe
+!examples/payload/*.exe
