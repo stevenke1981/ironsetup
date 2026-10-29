@@ -1,0 +1,6 @@
+The application is installed.
+
+Open IronSetup Demo from the Start Menu. To inspect file integrity, use:
+ironsetup verify --dir "your installation directory"
+
+Files you modify after installation are preserved when uninstalling.

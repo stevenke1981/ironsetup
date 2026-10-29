@@ -1,0 +1,28 @@
+[package]
+name = "ironsetup"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+anyhow.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tempfile.workspace = true
+ironsetup-core.workspace = true
+ironsetup-compiler.workspace = true
+ironsetup-engine.workspace = true
+ironsetup-ui.workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+[[bin]]
+name = "ironsetup"
+path = "src/main.rs"
+[[bin]]
+name = "ironsetup-stub"
+path = "src/stub.rs"
+[[bin]]
+name = "ironsetup-studio"
+path = "src/studio.rs"
+[[bin]]
+name = "ironsetup-demo"
+path = "src/demo.rs"

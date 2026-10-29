@@ -1,0 +1,10 @@
+IronSetup example guide
+
+1. Open windows-demo.iss in IronSetup Studio.
+2. Press F9 or Build. The output path appears in the log.
+3. Run the generated installer. Accept the demo license, choose a directory,
+   components and optional desktop shortcut, then install.
+4. Use Windows Installed Apps or unins000.exe to uninstall.
+
+For development and native Windows acceptance, read README.zh-TW.md and
+scripts/Test-Windows.ps1. Cross-compilation and Wine do not replace Windows UAT.

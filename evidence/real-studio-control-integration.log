@@ -1,0 +1,33 @@
+REAL STUDIO BUILD LOG:
+Build succeeded
+\\?\Z:\workspace\scratch\81c4b06116b5\ironsetup-ui\evidence\tmp\real-studio-control\Output\Real-Studio-Setup.exe
+1 files, 1330608 bytes
+
+PASS real Studio F9 produced a verified single-EXE installer (1330608 bytes)
+REAL INSTALLER RESULT:
+{
+  "target_dir": "\\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup-ui\\evidence\\tmp\\real-studio-control\\installed",
+  "installed_files": [
+    "hello.txt"
+  ],
+  "skipped_files": [],
+  "selected_components": [],
+  "selected_tasks": [],
+  "warnings": []
+}
+REAL VERIFY RESULT:
+{
+  "target_dir": "\\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup-ui\\evidence\\tmp\\real-studio-control\\installed",
+  "verified": [
+    "\\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup-ui\\evidence\\tmp\\real-studio-control\\installed\\hello.txt",
+    "\\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup-ui\\evidence\\tmp\\real-studio-control\\installed\\unins000.exe"
+  ],
+  "missing": [],
+  "modified": [],
+  "warnings": [
+    "Verification checks installed files and shortcuts; registry values are not included in the intact result"
+  ],
+  "intact": true
+}
+
+PASS generated real SFX wizard installed exact payload and real CLI verify/uninstall removed its isolated target

@@ -1,0 +1,320 @@
+{
+  "platform": "Windows EXE on Wine",
+  "native_windows": false,
+  "binary_sha256": {
+    "ironsetup.exe": "11064d5c351720c92dc1a6714e9beaf0cd95b8361ac9e861e636da59f681dbf8",
+    "ironsetup-stub.exe": "690bb663b607851402d40bc2d7dae8638f7f85256ad81a3e2f78b6be556f687e"
+  },
+  "checks": [
+    {
+      "name": "script check",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "check",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "PASS: IronSetup Hello — 3 files\n",
+      "stderr": ""
+    },
+    {
+      "name": "unsupported Pascal fails closed",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "check",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\unsupported-pascal.iss"
+      ],
+      "expected_exit": 2,
+      "exit_code": 2,
+      "result": "PASS",
+      "stdout": "",
+      "stderr": "IronSetup: \\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\unsupported-pascal.iss:8: Unsupported section [code] (Pascal Script is not implemented)\n"
+    },
+    {
+      "name": "compile verified archive",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "compile",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss",
+        "--package-only",
+        "--output",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello.ispkg"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "Built Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello.ispkg\nIronSetup Hello 1.0.0: 3 files, 1178 payload bytes, 3644 output bytes\n",
+      "stderr": ""
+    },
+    {
+      "name": "repeat deterministic compile",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "compile",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss",
+        "--package-only",
+        "--output",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello-again.ispkg"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "Built Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello-again.ispkg\nIronSetup Hello 1.0.0: 3 files, 1178 payload bytes, 3644 output bytes\n",
+      "stderr": ""
+    },
+    {
+      "name": "compiled bytes deterministic",
+      "result": "PASS"
+    },
+    {
+      "name": "inspect archive",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "inspect",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello.ispkg"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"format_version\": 1,\n  \"app\": {\n    \"id\": \"IronSetup.Hello\",\n    \"name\": \"IronSetup Hello\",\n    \"version\": \"1.0.0\",\n    \"publisher\": \"IronSetup Examples\",\n    \"default_dir\": \"{userpf}\\\\IronSetupHello\",\n    \"default_group\": \"IronSetup Hello\",\n    \"privileges\": \"lowest\",\n    \"uninstallable\": true,\n    \"compression\": \"zip\",\n    \"architectures_allowed\": \"\"\n  },\n  \"files\": [\n    {\n      \"path\": \"config/settings.toml\",\n      \"size\": 109,\n      \"sha256\": \"67e74a0868c65118082380530cbb8e67f45e7b69a544a41ecdee06edbccae00f\",\n      \"executable\": false,\n      \"flags\": [\n        \"onlyifdoesntexist\"\n      ],\n      \"conditions\": {\n        \"components\": \"core\",\n        \"tasks\": \"\"\n      }\n    },\n    {\n      \"path\": \"docs/guide.txt\",\n      \"size\": 479,\n      \"sha256\": \"80d43a8874253030e696f9641661b14fe2c4cd983fc85c53da3bd27d1c1bb749\",\n      \"executable\": false,\n      \"flags\": [\n        \"ignoreversion\"\n      ],\n      \"conditions\": {\n        \"components\": \"docs\",\n        \"tasks\": \"\"\n      }\n    },\n    {\n      \"path\": \"readme.txt\",\n      \"size\": 590,\n      \"sha256\": \"2abed819784bfdacadafe4b506e3c6d530225abcb2db2f54b525e748ed30d248\",\n      \"executable\": false,\n      \"flags\": [\n        \"ignoreversion\"\n      ],\n      \"conditions\": {\n        \"components\": \"core\",\n        \"tasks\": \"\"\n      }\n    }\n  ],\n  \"dirs\": [\n    {\n      \"path\": \"data\",\n      \"conditions\": {\n        \"components\": \"\",\n        \"tasks\": \"\"\n      }\n    }\n  ],\n  \"components\": [\n    {\n      \"name\": \"core\",\n      \"description\": \"Application files\",\n      \"types\": [\n        \"full\",\n        \"minimal\",\n        \"custom\"\n      ],\n      \"flags\": [\n        \"fixed\"\n      ],\n      \"conditions\": {\n        \"components\": \"\",\n        \"tasks\": \"\"\n      }\n    },\n    {\n      \"name\": \"docs\",\n      \"description\": \"Documentation\",\n      \"types\": [\n        \"full\"\n      ],\n      \"flags\": [],\n      \"conditions\": {\n        \"components\": \"\",\n        \"tasks\": \"\"\n      }\n    }\n  ],\n  \"tasks\": [],\n  \"types\": [\n    {\n      \"name\": \"full\",\n      \"description\": \"Application and documentation\",\n      \"custom\": false\n    },\n    {\n      \"name\": \"minimal\",\n      \"description\": \"Application only\",\n      \"custom\": false\n    },\n    {\n      \"name\": \"custom\",\n      \"description\": \"Custom selection\",\n      \"custom\": true\n    }\n  ],\n  \"icons\": [],\n  \"registry\": [],\n  \"run\": [],\n  \"license_text\": \"MIT License — IronSetup demonstration application\\n\\nCopyright (c) 2026 IronSetup contributors\\n\\nPermission is hereby granted, free of charge, to any person obtaining a copy\\nof this software and associated documentation files (the \\\"Software\\\"), to deal\\nin the Software without restriction, including without limitation the rights\\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\\ncopies of the Software, and to permit persons to whom the Software is\\nfurnished to do so, subject to the following conditions:\\n\\nThe above copyright notice and this permission notice shall be included in\\nall copies or substantial portions of the Software.\\n\\nTHE SOFTWARE IS PROVIDED \\\"AS IS\\\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\\nTHE SOFTWARE.\\n\",\n  \"info_before\": null,\n  \"info_after\": null\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "manifest has all three payload files",
+      "result": "PASS"
+    },
+    {
+      "name": "install explicit component subset",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "install",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello.ispkg",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Installed App",
+        "--components",
+        "core",
+        "--tasks=",
+        "--no-run",
+        "--log",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\install.log"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\",\n  \"installed_files\": [\n    \"config/settings.toml\",\n    \"readme.txt\"\n  ],\n  \"skipped_files\": [\n    \"docs/guide.txt\"\n  ],\n  \"selected_components\": [\n    \"core\"\n  ],\n  \"selected_tasks\": [],\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "selected files installed; docs omitted",
+      "result": "PASS"
+    },
+    {
+      "name": "verify clean installation",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "verify",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Installed App"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\",\n  \"verified\": [\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\config\\\\settings.toml\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\readme.txt\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\unins000.exe\"\n  ],\n  \"missing\": [],\n  \"modified\": [],\n  \"warnings\": [\n    \"Verification checks installed files and shortcuts; registry values are not included in the intact result\"\n  ],\n  \"intact\": true\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "modified file causes exit 3",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "verify",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Installed App"
+      ],
+      "expected_exit": 3,
+      "exit_code": 3,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\",\n  \"verified\": [\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\config\\\\settings.toml\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\unins000.exe\"\n  ],\n  \"missing\": [],\n  \"modified\": [\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\readme.txt\"\n  ],\n  \"warnings\": [\n    \"Verification checks installed files and shortcuts; registry values are not included in the intact result\"\n  ],\n  \"intact\": false\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "repeat install refuses existing journal",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "install",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello.ispkg",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Installed App",
+        "--no-run"
+      ],
+      "expected_exit": 2,
+      "exit_code": 2,
+      "result": "PASS",
+      "stdout": "",
+      "stderr": "IronSetup: An IronSetup installation or pending transaction already exists at \\\\?\\Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Installed App. Uninstall it first, or recover an interrupted transaction\n"
+    },
+    {
+      "name": "refused reinstall made no writes",
+      "result": "PASS"
+    },
+    {
+      "name": "uninstall",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "uninstall",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Installed App"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\",\n  \"removed\": [\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / EstimatedSize\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / NoRepair\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / NoModify\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / QuietUninstallString\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / UninstallString\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / InstallLocation\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / Publisher\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / DisplayVersion\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / DisplayName\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\unins000.exe\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\config\\\\settings.toml\"\n  ],\n  \"restored\": [],\n  \"preserved\": [\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Installed App\\\\readme.txt\"\n  ],\n  \"warnings\": [],\n  \"metadata_retained\": false\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "unowned and modified files preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "unmodified managed config removed",
+      "result": "PASS"
+    },
+    {
+      "name": "install over existing file",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "install",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\hello.ispkg",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Restore Original",
+        "--no-run"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Restore Original\",\n  \"installed_files\": [\n    \"config/settings.toml\",\n    \"docs/guide.txt\",\n    \"readme.txt\"\n  ],\n  \"skipped_files\": [],\n  \"selected_components\": [\n    \"core\",\n    \"docs\"\n  ],\n  \"selected_tasks\": [],\n  \"warnings\": []\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "uninstall restores existing file",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "uninstall",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Restore Original"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Restore Original\",\n  \"removed\": [\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / EstimatedSize\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / NoRepair\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / NoModify\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / QuietUninstallString\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / UninstallString\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / InstallLocation\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / Publisher\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / DisplayVersion\",\n    \"HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\IronSetup_ed6f1578d0f0281dcab797944e005b5b / DisplayName\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Restore Original\\\\unins000.exe\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Restore Original\\\\docs\\\\guide.txt\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Restore Original\\\\config\\\\settings.toml\"\n  ],\n  \"restored\": [\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\Restore Original\\\\readme.txt\"\n  ],\n  \"preserved\": [],\n  \"warnings\": [],\n  \"metadata_retained\": false\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "original bytes restored",
+      "result": "PASS"
+    },
+    {
+      "name": "tampered package rejected",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "install",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\corrupt.ispkg",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Must Not Exist"
+      ],
+      "expected_exit": 2,
+      "exit_code": 2,
+      "result": "PASS",
+      "stdout": "",
+      "stderr": "IronSetup: Package checksum mismatch\n"
+    },
+    {
+      "name": "integrity failure creates no install directory",
+      "result": "PASS"
+    },
+    {
+      "name": "compile executable installer",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "compile",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss",
+        "--stub",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\target\\portable-windows\\x86_64-pc-windows-gnu\\release\\ironsetup-stub.exe",
+        "--output",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Self Extracting Setup.exe"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "Built Z:\\tmp\\IronSetup-smoke-o_8x__rg\\Self Extracting Setup.exe\nIronSetup Hello 1.0.0: 3 files, 1178 payload bytes, 1333364 output bytes\n",
+      "stderr": ""
+    },
+    {
+      "name": "execute self-extracting installer",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/tmp/IronSetup-smoke-o_8x__rg/Self Extracting Setup.exe",
+        "/VERYSILENT",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\SFX Install",
+        "/NORESTART",
+        "--no-run"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "verify SFX installation",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "verify",
+        "--dir",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\SFX Install"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "{\n  \"target_dir\": \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\SFX Install\",\n  \"verified\": [\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\SFX Install\\\\config\\\\settings.toml\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\SFX Install\\\\docs\\\\guide.txt\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\SFX Install\\\\readme.txt\",\n    \"\\\\\\\\?\\\\Z:\\\\tmp\\\\IronSetup-smoke-o_8x__rg\\\\SFX Install\\\\unins000.exe\"\n  ],\n  \"missing\": [],\n  \"modified\": [],\n  \"warnings\": [\n    \"Verification checks installed files and shortcuts; registry values are not included in the intact result\"\n  ],\n  \"intact\": true\n}\n",
+      "stderr": ""
+    },
+    {
+      "name": "run standalone installed uninstaller",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/tmp/IronSetup-smoke-o_8x__rg/SFX Install/unins000.exe",
+        "--silent",
+        "--log",
+        "Z:\\tmp\\IronSetup-smoke-o_8x__rg\\uninstall-sfx.log"
+      ],
+      "expected_exit": 0,
+      "exit_code": 0,
+      "result": "PASS",
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "name": "clean SFX installation fully removed",
+      "result": "PASS"
+    }
+  ],
+  "result": "PASS"
+}

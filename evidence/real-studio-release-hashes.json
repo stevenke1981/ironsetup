@@ -1,0 +1,26 @@
+{
+  "source_head": "29f5a44",
+  "files": {
+    "ironsetup.exe": {
+      "sha256": "11064d5c351720c92dc1a6714e9beaf0cd95b8361ac9e861e636da59f681dbf8",
+      "bytes": 1647616,
+      "unchanged_after_test": true
+    },
+    "ironsetup-studio.exe": {
+      "sha256": "1674dc0bd34bf9aa63b714129f323395cc91bb6c8466b5434dbffe5e0d020271",
+      "bytes": 1013760,
+      "unchanged_after_test": true
+    },
+    "ironsetup-stub.exe": {
+      "sha256": "690bb663b607851402d40bc2d7dae8638f7f85256ad81a3e2f78b6be556f687e",
+      "bytes": 1329664,
+      "unchanged_after_test": true
+    }
+  },
+  "generated_sfx": {
+    "sha256": "ebed99e82a02df07efab7106174577df76db61415a69154b5b6ce4a69c460583",
+    "bytes": 1330608
+  },
+  "runtime": "Wine 9.0 x64 / Xvfb; native Windows NOT_RUN",
+  "complete_chain_result": "PASS using normal native Next button clicks"
+}

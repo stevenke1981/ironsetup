@@ -1,0 +1,8 @@
+
+running 1 test
+test native_wizard_and_studio_end_to_end ... PASS wizard license gate, destination, type, fixed components, conditional tasks, progress, busy close, result and warning text
+PASS studio UTF-8 edit/save, F9, threaded build, busy close, completion and warning log
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.61s
+

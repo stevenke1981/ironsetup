@@ -1,0 +1,170 @@
+{
+  "task_id": "IRONSETUP-001",
+  "head_sha": "29f5a441b96f17a04da9d9d12ff3134663bb358b",
+  "actor_instance": "/root",
+  "receiver_instance": "user",
+  "kind": "delivery_handoff",
+  "result": "PASS",
+  "result_scope": "Implemented compatibility subset and locally verified portable distribution; native Windows UAT NOT_RUN",
+  "simulation": false,
+  "observed_at": "2026-10-25T02:20:48+08:00",
+  "acceptance_ids": [
+    "AC1",
+    "AC2",
+    "AC3",
+    "AC4",
+    "AC5",
+    "AC6"
+  ],
+  "artifact": {
+    "path": "evidence/VERIFICATION.md",
+    "sha256": "691fec300364580ba00eadcdb0e8204709bdef15de360377a765f474afa6bec6"
+  },
+  "team": {
+    "integrator": "/root",
+    "compiler_and_independent_engine_reviewer": "/root/compiler",
+    "engine": "/root/engine",
+    "desktop": "/root/desktop",
+    "separate_git_worktrees": true
+  },
+  "test_counts": {
+    "linux": {
+      "passed": 67,
+      "failed": 0,
+      "ignored": 0,
+      "release_checks_passed": 27
+    },
+    "windows_wine": {
+      "passed": 64,
+      "failed": 0,
+      "ignored": 1,
+      "release_checks_passed": 26
+    }
+  },
+  "checks": [
+    {
+      "name": "format",
+      "platform": "linux",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "name": "workspace-unit-and-integration",
+      "platform": "linux",
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--workspace"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "PASS",
+      "evidence": "evidence/linux-unit-tests.log"
+    },
+    {
+      "name": "workspace-windows-pe-execution",
+      "platform": "windows-pe-on-wine",
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "--locked",
+        "--workspace",
+        "--target",
+        "x86_64-pc-windows-gnu",
+        "--",
+        "--test-threads=1"
+      ],
+      "runner": "/usr/lib/wine/wine64",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "PASS",
+      "evidence": "evidence/windows-tests-wine.log"
+    },
+    {
+      "name": "release-linux",
+      "platform": "linux",
+      "argv": [
+        "python3",
+        "scripts/smoke.py",
+        "--bin-dir",
+        "target/portable-linux/release",
+        "--report",
+        "evidence/smoke-linux.json"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "name": "release-windows",
+      "platform": "windows-pe-on-wine",
+      "argv": [
+        "python3",
+        "scripts/smoke.py",
+        "--bin-dir",
+        "target/portable-windows/x86_64-pc-windows-gnu/release",
+        "--runner",
+        "/usr/lib/wine/wine64",
+        "--report",
+        "evidence/smoke-wine.json"
+      ],
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "PASS"
+    },
+    {
+      "name": "actual-studio-compile-sfx-gui-install-verify-uninstall",
+      "platform": "windows-pe-on-wine",
+      "cwd": ".",
+      "exit_code": 0,
+      "result": "PASS",
+      "evidence": "evidence/real-studio-integration.md"
+    },
+    {
+      "name": "independent-engine-review",
+      "platform": "linux",
+      "result": "PASS",
+      "reproduced_findings": 2,
+      "verified_fixed_findings": 2,
+      "evidence": "evidence/review-engine-findings.json"
+    },
+    {
+      "name": "native-windows-uat",
+      "platform": "Windows 10/11 OS",
+      "argv": [],
+      "cwd": ".",
+      "exit_code": null,
+      "result": "NOT_RUN"
+    },
+    {
+      "name": "hosted-ci-pr-and-publication",
+      "platform": "external-services",
+      "argv": [],
+      "cwd": ".",
+      "exit_code": null,
+      "result": "N/A"
+    }
+  ],
+  "unresolved": [
+    "Native Windows 10/11, UAC and multi-monitor DPI acceptance not executed.",
+    "The initial rapid synthetic WM_COMMAND Wine assertion has no proven root cause; the normal button route passes with unchanged release binaries.",
+    "Intentional v0.1 compatibility limits are documented in docs/COMPATIBILITY.md."
+  ],
+  "next_action": "Extract the portable ZIP and run Start-IronSetup.cmd; perform native Windows acceptance before production deployment.",
+  "external_side_effects": {
+    "authorized": false,
+    "performed": false,
+    "scope": "Remote repository pushes, messages, hosted CI, deployments and public releases; local requested artifact creation is separate."
+  }
+}

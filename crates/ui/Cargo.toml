@@ -1,0 +1,10 @@
+[package]
+name = "ironsetup-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+anyhow.workspace = true
+ironsetup-core.workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_UI_Shell_Common", "Win32_UI_Input_KeyboardAndMouse"] }

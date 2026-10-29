@@ -1,0 +1,29 @@
+[workspace]
+members = ["crates/core", "crates/compiler", "crates/engine", "crates/ui", "crates/cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "=1.0.100"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
+sha2 = "=0.10.9"
+flate2 = "=1.1.5"
+glob = "=0.3.3"
+tempfile = "=3.23.0"
+windows-sys = { version = "=0.59.0", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Threading", "Win32_System_Com", "Win32_Security", "Win32_System_Registry", "Win32_UI_Controls", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_Storage_FileSystem"] }
+windows = { version = "=0.58.0", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell", "Win32_Storage_FileSystem"] }
+ironsetup-core = { path = "crates/core" }
+ironsetup-compiler = { path = "crates/compiler" }
+ironsetup-engine = { path = "crates/engine" }
+ironsetup-ui = { path = "crates/ui" }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

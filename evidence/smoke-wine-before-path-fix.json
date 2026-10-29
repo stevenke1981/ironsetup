@@ -1,0 +1,26 @@
+{
+  "platform": "Windows EXE on Wine",
+  "native_windows": false,
+  "binary_sha256": {
+    "ironsetup.exe": "38dd27aa0e8525d339d3b1b15e2de75d5d6ebabf5a9790f080c527d208d2026d",
+    "ironsetup-stub.exe": "24327943a86704c38e8341cd8aad4b355f65b1cb7081408a082c2828c35b8775"
+  },
+  "checks": [
+    {
+      "name": "script check",
+      "argv": [
+        "/usr/lib/wine/wine64",
+        "/workspace/scratch/81c4b06116b5/ironsetup/target/portable-windows/x86_64-pc-windows-gnu/release/ironsetup.exe",
+        "check",
+        "Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss"
+      ],
+      "expected_exit": 0,
+      "exit_code": 2,
+      "result": "FAIL",
+      "stdout": "",
+      "stderr": "IronSetup: \\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss:28: Wildcards are supported only in the final Source filename, not directory segments\n"
+    }
+  ],
+  "result": "FAIL",
+  "error": "script check: exit 2, wanted 0\n\nIronSetup: \\\\?\\Z:\\workspace\\scratch\\81c4b06116b5\\ironsetup\\examples\\hello.iss:28: Wildcards are supported only in the final Source filename, not directory segments\n"
+}

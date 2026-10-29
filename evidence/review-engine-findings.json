@@ -1,0 +1,112 @@
+{
+  "task_id": "REVIEW-ENGINE-001",
+  "actor_instance": "/root/compiler",
+  "receiver_instance": "/root/engine",
+  "role": "independent_reviewer",
+  "kind": "review",
+  "result": "PASS",
+  "simulation": false,
+  "source_head_sha": "8e37d46d30f1b9c04a9874e468d8d1030e5e1eb3",
+  "tested_sha": "493d7a969b32051b1001e6440082763fb16f22ff",
+  "acceptance_ids": [
+    "AC3"
+  ],
+  "artifact": {
+    "path": "evidence/review-engine.md",
+    "sha256": "08e532cd1e127345a1b7b137084f6d0894619880841e82d11d93013451da0067"
+  },
+  "checks": [
+    {
+      "name": "independent-engine-regressions",
+      "platform": "Linux x86_64",
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "ironsetup-engine",
+        "--test",
+        "review_regressions",
+        "--",
+        "--test-threads=1"
+      ],
+      "cwd": "/workspace/scratch/81c4b06116b5/ironsetup-compiler",
+      "exit_code": 101,
+      "result": "FAIL",
+      "passed": 0,
+      "failed": 2,
+      "phase": "baseline",
+      "source_head_sha": "2642f3254844f27ecc96bcbb6b55a66276117ded"
+    },
+    {
+      "name": "independent-engine-regressions-after-fix",
+      "phase": "fixed",
+      "platform": "Linux x86_64",
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "ironsetup-engine",
+        "--test",
+        "review_regressions",
+        "--",
+        "--test-threads=1"
+      ],
+      "cwd": "/workspace/scratch/81c4b06116b5/ironsetup-compiler",
+      "environment": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TARGET_DIR": "/workspace/scratch/81c4b06116b5/ironsetup-compiler/target-review-fixed"
+      },
+      "source_head_sha": "8e37d46d30f1b9c04a9874e468d8d1030e5e1eb3",
+      "tested_sha": "493d7a969b32051b1001e6440082763fb16f22ff",
+      "exit_code": 0,
+      "result": "PASS",
+      "passed": 2,
+      "failed": 0
+    }
+  ],
+  "findings": [
+    {
+      "id": "REVIEW-ENGINE-01",
+      "severity": "P1",
+      "file": "crates/engine/src/journal.rs",
+      "lines": [
+        34,
+        44,
+        219,
+        225,
+        485
+      ],
+      "summary": "Journal file records can redirect uninstall to unrelated non-shortcut files under programs/desktop roots",
+      "test": "journal_cannot_redirect_uninstall_to_unrelated_nonshortcut_file",
+      "observed": "Uninstall succeeded and deleted the disposable unrelated private-notes.txt outside the app directory",
+      "status": "RESOLVED",
+      "fixed_by": "8e37d46d30f1b9c04a9874e468d8d1030e5e1eb3",
+      "regression_result": "PASS"
+    },
+    {
+      "id": "REVIEW-ENGINE-02",
+      "severity": "P2",
+      "file": "crates/engine/src/journal.rs",
+      "lines": [
+        469,
+        475
+      ],
+      "summary": "Equal original and installed bytes skip restoration of original file permissions",
+      "test": "equal_content_original_file_permissions_are_restored",
+      "observed": "Original mode 0600 remained 0644 after uninstall",
+      "status": "RESOLVED",
+      "fixed_by": "8e37d46d30f1b9c04a9874e468d8d1030e5e1eb3",
+      "regression_result": "PASS"
+    }
+  ],
+  "unresolved": [
+    "Native Windows registry/COM execution NOT_RUN in this focused review"
+  ],
+  "next_action": "Root integrates evidence; retain separate platform verification statuses. Both concrete reported findings are resolved.",
+  "external_side_effects": {
+    "authorized": false,
+    "performed": false
+  }
+}

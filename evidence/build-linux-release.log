@@ -1,0 +1,6 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling ironsetup-compiler v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/compiler)
+   Compiling ironsetup v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/cli)
+    Finished `release` profile [optimized] target(s) in 13.70s

@@ -1,0 +1,5 @@
+This example installs a small Rust demonstration application.
+
+The core application is required; the documentation and desktop shortcut are
+optional. Existing configuration is retained. You can remove the application
+using Installed Apps or the uninstaller in its directory.

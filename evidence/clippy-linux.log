@@ -1,0 +1,4 @@
+    Checking ironsetup-compiler v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/compiler)
+    Checking ironsetup-ui v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/ui)
+    Checking ironsetup v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.88s

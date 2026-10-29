@@ -1,0 +1,40 @@
+    Checking cfg-if v1.0.5
+    Checking typenum v1.20.1
+    Checking windows-link v0.2.1
+    Checking simd-adler32 v0.3.10
+    Checking serde_core v1.0.228
+    Checking adler2 v2.0.1
+    Checking windows_x86_64_gnu v0.52.6
+    Checking once_cell v1.21.4
+    Checking windows-sys v0.61.2
+    Checking ryu v1.0.23
+    Checking crc32fast v1.5.3
+    Checking getrandom v0.3.4
+    Checking miniz_oxide v0.8.9
+    Checking itoa v1.0.18
+    Checking memchr v2.8.3
+    Checking fastrand v2.5.0
+    Checking cpufeatures v0.2.17
+    Checking windows-targets v0.52.6
+    Checking anyhow v1.0.100
+    Checking windows-result v0.2.0
+    Checking windows-sys v0.59.0
+    Checking glob v0.3.3
+    Checking flate2 v1.1.5
+    Checking windows-strings v0.1.0
+    Checking windows-core v0.58.0
+    Checking generic-array v0.14.7
+    Checking windows v0.58.0
+    Checking tempfile v3.23.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+    Checking serde_json v1.0.145
+    Checking serde v1.0.228
+    Checking ironsetup-core v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/core)
+    Checking ironsetup-compiler v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/compiler)
+    Checking ironsetup-ui v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/ui)
+    Checking ironsetup-engine v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/engine)
+    Checking ironsetup v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.49s

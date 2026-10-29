@@ -1,0 +1,16 @@
+[package]
+name = "ironsetup-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ironsetup-core.workspace = true
+tempfile.workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+windows.workspace = true
+[dev-dependencies]
+tempfile.workspace = true

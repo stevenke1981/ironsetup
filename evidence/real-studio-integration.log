@@ -1,0 +1,8 @@
+REAL STUDIO BUILD LOG:
+Build succeeded
+\\?\Z:\workspace\scratch\81c4b06116b5\ironsetup-ui\evidence\tmp\real-studio\Output\Real-Studio-Setup.exe
+1 files, 1330608 bytes
+
+PASS real Studio F9 produced a verified single-EXE installer (1330608 bytes)
+free(): invalid pointer
+Error: GUI exited while waiting for Choose an installation folder: exit code: 0x80000101

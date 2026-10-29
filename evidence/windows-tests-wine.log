@@ -1,0 +1,181 @@
+   Compiling ironsetup-ui v0.1.0 (/workspace/scratch/81c4b06116b5/ironsetup/crates/ui)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running unittests src/lib.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup-f60c470bc8418d55.exe)
+
+running 4 tests
+test tests::invalid_cli_never_silently_ignored ... ok
+test tests::parses_iscc_and_unix_paths ... ok
+test tests::parses_setup_aliases_and_empty_tasks ... ok
+test windows::tests::quotes_windows_arguments ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup-2b7080abdcef6068.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/demo.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_demo-4c63ab982fef59db.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/stub.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_stub-af99c963c719563f.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/studio.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_studio-d1c716397ba8461d.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_compiler-11687e9825824146.exe)
+
+running 2 tests
+test compile::files::windows_path_tests::windows_prefix_markers_are_not_directory_wildcards ... ok
+test compile::files::windows_path_tests::windows_verbatim_paths_still_reject_wildcard_directory_names ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compiler.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/compiler-306d64cfc76edb8a.exe)
+
+running 29 tests
+test actual_wildcards_in_source_directory_components_are_rejected ... ok
+test bad_quotes_and_duplicate_parameters_have_line_diagnostics ... ok
+test brackets_are_literal_in_source_and_exclude_patterns ... ok
+test canonical_windows_script_path_compiles_with_verbatim_prefix ... ok
+test destname_renames_single_file_and_rejects_colliding_multiple_sources ... ok
+test duplicate_destinations_are_detected_case_insensitively ... ok
+test exclude_patterns_match_unanchored_suffixes_and_do_not_expand_star_dot_star ... ok
+test explicit_overwrite_policy_is_required ... ok
+test feature_conditions_are_parsed_and_reference_checked ... ok
+test file_directory_conflicts_are_detected ... ok
+test icons_require_supported_destinations_and_app_targets ... ok
+test include_cycles_and_undefined_macros_are_errors ... ok
+test includes_defines_and_cli_overrides_have_source_locations ... ok
+test minimal_compilation_and_round_trip_are_deterministic ... ok
+test missing_source_is_skipped_only_with_explicit_flag ... ok
+test nested_icon_constants_and_special_output_prefixes_are_rejected ... ok
+test output_directory_is_relative_to_source_directory ... ok
+test plain_utf8_license_is_embedded_and_rtf_rejected ... ok
+test quoted_semicolons_and_doubled_quotes_survive ... ok
+test recursive_sources_exclusions_and_empty_directories ... ok
+test registry_values_are_normalized_and_roots_validated ... ok
+test run_entries_are_explicit_and_conflicting_flags_fail ... ok
+test runtime_constants_are_checked_and_literal_braces_are_preserved ... ok
+test setup_rejects_unsupported_compression_architecture_and_default_roots ... ok
+test source_star_dot_star_includes_extensionless_files ... ok
+test too_deep_conditions_are_rejected_without_recursing_unboundedly ... ok
+test unknown_syntax_fails_closed ... ok
+test unsafe_destinations_and_reserved_names_are_rejected ... ok
+test unsupported_component_hierarchy_and_cycles_are_rejected ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running unittests src/lib.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_core-e947037945132c8f.exe)
+
+running 10 tests
+test bundle::tests::deterministic_compressed_roundtrip ... ok
+test bundle::tests::embedded_roundtrip_and_stub_strip ... ok
+test bundle::tests::rejects_bad_payload_and_traversal ... ok
+test bundle::tests::rejects_case_insensitive_collision ... ok
+test bundle::tests::rejects_corruption_and_truncation ... ok
+test bundle::tests::stored_roundtrip ... ok
+test paths::tests::guards_windows_path_forms ... ok
+test selection::tests::names_lists ... ok
+test selection::tests::precedence ... ok
+test selection::tests::syntax_is_not_short_circuited ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_engine-ae7ca762f9fca51c.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/lifecycle.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/lifecycle-30f4fdb33d5f845c.exe)
+
+running 14 tests
+test a_digest_failure_happens_before_any_directory_is_created ... ok
+test an_active_transaction_blocks_a_second_operation ... ok
+test existing_optional_file_is_not_owned_or_removed ... ok
+test explicit_components_include_fixed_and_validate_task_dependencies ... ok
+test failed_second_write_rolls_back_first_write_to_original_bytes ... ok
+test fresh_install_verify_uninstall_preserves_unowned_files ... ok
+test interrupted_transaction_can_be_recovered_without_losing_originals ... ok
+test keep_flag_retains_installed_file ... ok
+test modified_overwritten_files_preserve_both_user_edit_and_original_backup ... ok
+test overwrites_are_backed_up_and_originals_restored ... ok
+test repeated_install_is_explicitly_refused ... ok
+test tampered_uninstall_path_is_rejected_without_touching_other_files ... ok
+test traversal_and_case_collisions_fail_before_mutation ... ok
+test uninstallable_false_still_has_safe_installation_metadata ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+
+     Running tests/review_regressions.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/review_regressions-c3442be5677eb928.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/windows_lifecycle.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/windows_lifecycle-973c22b5abbad3e6.exe)
+
+running 1 test
+test native_registry_shortcut_and_arp_install_uninstall ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.52s
+
+     Running unittests src/lib.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/ironsetup_ui-cb7f333d8464f479.exe)
+
+running 4 tests
+test flow::tests::license_and_information_cannot_be_skipped_by_default_route ... ok
+test flow::tests::types_fixed_components_and_conditional_task_defaults ... ok
+test flow::tests::unicode_editor_line_endings_are_normalized_once ... ok
+test tests::expected_wizard_outcomes_remain_distinct_through_context ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/native_ui_smoke.rs (target/windows-acceptance/x86_64-pc-windows-gnu/debug/deps/native_ui_smoke-4f67d63d630eac8e.exe)
+
+running 1 test
+test native_wizard_and_studio_end_to_end ... ignored, requires a Windows desktop or Wine with DISPLAY; explicitly run --ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ironsetup
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ironsetup_compiler
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ironsetup_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ironsetup_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests ironsetup_ui
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
