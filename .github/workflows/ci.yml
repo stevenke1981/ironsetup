@@ -1,0 +1,51 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: bash scripts/ci.sh
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - run: cargo test --locked --workspace
+      - run: cargo build --locked --release --workspace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ironsetup-windows-x64
+          path: |
+            target/release/ironsetup.exe
+            target/release/ironsetup-stub.exe
+            target/release/ironsetup-studio.exe
+            target/release/ironsetup-demo.exe
+          if-no-files-found: warn
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked --workspace --all-targets
