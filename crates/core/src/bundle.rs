@@ -420,6 +420,32 @@ mod tests {
         assert_eq!(q.manifest.app.id, "demo");
     }
     #[test]
+    fn arbitrary_mutations_never_panic() {
+        // Re-sign every mutated buffer so corruption reaches the parser rather
+        // than stopping at the outer checksum.
+        let base = encode_package(&sample()).unwrap();
+        let body = base.len() - 32;
+        let mut seed = 0x9E37_79B9_7F4A_7C15u64;
+        for i in 0..4000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let mut b = base[..body].to_vec();
+            match i % 3 {
+                0 => b[(seed as usize) % body] ^= (seed >> 32) as u8 | 1,
+                1 => b.truncate((seed as usize) % body),
+                _ => {
+                    let at = 8 + (seed as usize) % 8;
+                    b[at] = (seed >> 24) as u8;
+                }
+            }
+            let digest = Sha256::digest(&b);
+            b.extend_from_slice(&digest);
+            let r = std::panic::catch_unwind(|| decode_package(&b));
+            assert!(r.is_ok(), "decoder panicked on mutation {i}");
+        }
+    }
+    #[test]
     fn rejects_corruption_and_truncation() {
         let mut b = encode_package(&sample()).unwrap();
         b[25] ^= 1;
