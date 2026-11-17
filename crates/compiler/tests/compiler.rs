@@ -521,3 +521,98 @@ fn setup_rejects_unsupported_compression_architecture_and_default_roots() {
     assert!(compile_error("[Setup]\nArchitecturesAllowed=x86\n").contains("Only x64compatible"));
     assert!(compile_error("[Setup]\nSolidCompression=yes\n").contains("not implemented"));
 }
+
+fn valid_ico() -> Vec<u8> {
+    let mut dib = vec![0u8; 48];
+    dib[0] = 40;
+    let mut b = vec![0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0];
+    b.extend_from_slice(&(dib.len() as u32).to_le_bytes());
+    b.extend_from_slice(&22u32.to_le_bytes());
+    b.extend_from_slice(&dib);
+    b
+}
+
+#[test]
+fn setup_icon_is_validated_and_returned_outside_the_manifest() {
+    let d = fixture();
+    fs::write(d.path().join("icon.ico"), valid_ico()).unwrap();
+    let s = script(
+        d.path(),
+        &format!("SetupIconFile=icon.ico\n{}", file_entry()),
+    );
+    let compiled = compile_script(&s, &CompileOptions::default()).unwrap();
+    assert!(compiled.setup_icon.unwrap().ends_with("icon.ico"));
+}
+
+#[test]
+fn setup_icon_missing_or_invalid_is_a_located_error() {
+    let m = compile_error("SetupIconFile=nope.ico\n");
+    assert!(
+        m.contains("test.iss:7:") && m.contains("Cannot read"),
+        "{m}"
+    );
+    let d = fixture();
+    fs::write(d.path().join("bad.ico"), b"not an icon at all").unwrap();
+    let e = compile_script(
+        &script(d.path(), "SetupIconFile=bad.ico\n"),
+        &CompileOptions::default(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(e.contains("Not an .ico"), "{e}");
+    let mut cursor = valid_ico();
+    cursor[2] = 2;
+    fs::write(d.path().join("cur.ico"), cursor).unwrap();
+    assert!(compile_script(
+        &script(d.path(), "SetupIconFile=cur.ico\n"),
+        &CompileOptions::default()
+    )
+    .is_err());
+}
+
+#[test]
+fn uninstall_display_icon_must_be_app_relative() {
+    for bad in [
+        "C:\\Windows\\x.exe",
+        "{pf}\\x.exe",
+        "{app}\\..\\x.exe",
+        "{app}",
+        "app.exe",
+    ] {
+        let m = compile_error(&format!("UninstallDisplayIcon={bad}\n"));
+        assert!(m.contains("test.iss:7:"), "{bad}: {m}");
+    }
+    let m = compile_error("Uninstallable=no\nUninstallDisplayIcon={app}\\app.txt\n");
+    assert!(m.contains("Uninstallable=yes"), "{m}");
+    let d = fixture();
+    let s = d.path().join("test.iss");
+    fs::write(
+        &s,
+        format!(
+            "{}UninstallDisplayIcon={{app}}\\app.txt\n{}",
+            header(),
+            file_entry()
+        ),
+    )
+    .unwrap();
+    let c = compile_script(&s, &CompileOptions::default()).unwrap();
+    assert_eq!(c.package.manifest.app.uninstall_icon, "{app}\\app.txt");
+    assert!(c
+        .warnings
+        .iter()
+        .all(|w| !w.message.contains("UninstallDisplayIcon")));
+    fs::write(
+        &s,
+        format!(
+            "{}UninstallDisplayIcon={{app}}\\other.exe\n{}",
+            header(),
+            file_entry()
+        ),
+    )
+    .unwrap();
+    let c = compile_script(&s, &CompileOptions::default()).unwrap();
+    assert!(c
+        .warnings
+        .iter()
+        .any(|w| w.message.contains("UninstallDisplayIcon")));
+}

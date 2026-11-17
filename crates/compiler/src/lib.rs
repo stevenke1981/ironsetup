@@ -23,5 +23,7 @@ pub struct CompiledScript {
     pub package: Package,
     pub output_dir: PathBuf,
     pub output_basename: String,
+    /// Validated SetupIconFile (embedded into the setup EXE by the CLI; not part of the package).
+    pub setup_icon: Option<PathBuf>,
     pub warnings: Vec<Diagnostic>,
 }

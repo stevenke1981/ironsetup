@@ -1,0 +1,5 @@
+# The installer stub must run on clean Windows machines that do not have the
+# Visual C++ Redistributable. Link the C runtime statically for MSVC targets so
+# ironsetup-stub.exe has no vcruntime140.dll / VCRUNTIME imports.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

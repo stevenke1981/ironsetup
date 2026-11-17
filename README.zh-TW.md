@@ -57,6 +57,8 @@ Name: "{group}\My App"; Filename: "{app}\MyApp.exe"
 
 把腳本放在專案資料夾；相對 Source 路徑以腳本所在目錄／`SourceDir` 為基準。
 
+`[Setup]` 可加入 `SetupIconFile=app.ico`（嵌入安裝檔與 `unins000.exe` 的圖示，僅 Windows 主機）與 `UninstallDisplayIcon={app}\MyApp.exe`（「已安裝的應用程式」圖示）。
+
 ```powershell
 .\bin\windows-x64\ironsetup.exe compile .\my-app.iss `
   --stub .\bin\windows-x64\ironsetup-stub.exe `

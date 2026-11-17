@@ -32,6 +32,8 @@ const SETUP_KEYS: &[&str] = &[
     "infobeforefile",
     "infoafterfile",
     "architecturesallowed",
+    "setupiconfile",
+    "uninstalldisplayicon",
 ];
 const CONSTANTS: &[&str] = &[
     "app",
@@ -136,6 +138,24 @@ pub fn compile_script(path: &Path, options: &CompileOptions) -> Result<CompiledS
     )?;
     let registry = compile_registry(&parsed, &component_names, &task_names, &privileges)?;
     let run = compile_run(&parsed, &component_names, &task_names)?;
+    let uninstall_icon = match parsed.setting("uninstalldisplayicon") {
+        None => String::new(),
+        Some(value) => {
+            parse_uninstall_icon(value)
+                .map_err(|e| parsed.setting_error("uninstalldisplayicon", format!("{e:#}")))?;
+            if !uninstallable {
+                return Err(parsed.setting_error(
+                    "uninstalldisplayicon",
+                    "UninstallDisplayIcon requires Uninstallable=yes",
+                ));
+            }
+            value.to_owned()
+        }
+    };
+    let setup_icon = match parsed.setting("setupiconfile") {
+        None => None,
+        Some(value) => Some(read_setup_icon(&parsed, &source_dir, value)?),
+    };
     let app = AppInfo {
         id: app_id,
         name: app_name,
@@ -147,6 +167,7 @@ pub fn compile_script(path: &Path, options: &CompileOptions) -> Result<CompiledS
         uninstallable,
         compression,
         architectures_allowed: architecture,
+        uninstall_icon,
     };
     let manifest = Manifest {
         format_version: FORMAT_VERSION,
@@ -204,6 +225,17 @@ pub fn compile_script(path: &Path, options: &CompileOptions) -> Result<CompiledS
         warnings.push(Diagnostic { file: script.display().to_string(), line: 0,
             message: "[Run] nowait reports launch success only; external program side effects cannot be rolled back.".to_owned() });
     }
+    if !manifest.app.uninstall_icon.is_empty() {
+        let (relative, _) = parse_uninstall_icon(&manifest.app.uninstall_icon)?;
+        if !manifest
+            .files
+            .iter()
+            .any(|f| f.path.eq_ignore_ascii_case(&relative))
+        {
+            warnings.push(Diagnostic { file: script.display().to_string(), line: 0,
+                message: format!("UninstallDisplayIcon {} is not installed by any [Files] entry; Windows will show a generic icon unless another step creates it.", manifest.app.uninstall_icon) });
+        }
+    }
     let package = Package { manifest, payloads };
     ironsetup_core::bundle::validate_package(&package)
         .with_context(|| format!("{}: package validation failed", script.display()))?;
@@ -211,8 +243,27 @@ pub fn compile_script(path: &Path, options: &CompileOptions) -> Result<CompiledS
         package,
         output_dir,
         output_basename,
+        setup_icon,
         warnings,
     })
+}
+
+fn read_setup_icon(parsed: &Parsed, base: &Path, value: &str) -> Result<PathBuf> {
+    let err = |m: String| parsed.setting_error("setupiconfile", m);
+    if value.is_empty() {
+        return Err(err("SetupIconFile cannot be empty".into()));
+    }
+    let path = resolve_host_path(base, value).map_err(|e| err(format!("{e:#}")))?;
+    let bytes = fs::File::open(&path)
+        .and_then(|f| {
+            let mut bytes = Vec::new();
+            f.take(ironsetup_core::ico::MAX_ICO_BYTES as u64 + 1)
+                .read_to_end(&mut bytes)?;
+            Ok(bytes)
+        })
+        .map_err(|e| err(format!("Cannot read {}: {e}", path.display())))?;
+    parse_ico(&bytes).map_err(|e| err(format!("{}: {e:#}", path.display())))?;
+    Ok(path)
 }
 
 fn resolve_host_path(base: &Path, value: &str) -> Result<PathBuf> {

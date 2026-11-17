@@ -23,6 +23,9 @@ pub struct AppInfo {
     /// "x64compatible" or empty. This release builds an x64 Windows stub.
     #[serde(default)]
     pub architectures_allowed: String,
+    /// UninstallDisplayIcon: {app}\relative.exe[,index]. Empty = none. Old journals lack it.
+    #[serde(default)]
+    pub uninstall_icon: String,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `.iss` 與 section 語法 | 已實作子集 | UTF-8／BOM、全行註解、引號、分號、重複鍵檢查；未知語法報錯 |
 | ISPP | 部分 | 僅 literal define/include/替換；無函式、條件編譯、expression evaluator |
-| `[Setup]` | 部分 | AppId／Name／Version／Publisher、DefaultDir／Group、權限、解除安裝開關、輸出／來源、文字資訊、x64compatible |
+| `[Setup]` | 部分 | AppId／Name／Version／Publisher、DefaultDir／Group、權限、解除安裝開關、輸出／來源、文字資訊、x64compatible、`SetupIconFile`、`UninstallDisplayIcon` |
 | `[Files]`／`[Dirs]` | 已實作子集 | 檔案只安裝到 `{app}`，沒有系統目錄 DLL／字型寫入 |
 | 檔案版本比較 | 拒絕隱含行為 | 必須明確給 `ignoreversion` 或 `onlyifdoesntexist` |
 | 遞迴／排除／空目錄 | 已實作 | wildcard 是記錄在文件中的子集；防循環、symlink、reparse |
@@ -27,7 +27,9 @@
 | 安裝精靈 | 已實作 | 原生控制項、文字授權／資訊頁、選擇、進度與結果；英文 |
 | 編譯 IDE | 部分 | New／Open／Save／Save As、UTF-8 編輯器、F9、背景編譯、log；沒有語法上色／Pascal debugger |
 | 靜默安裝／解除安裝 | 已實作子集 | `/SILENT` 和 `/VERYSILENT` 都無 GUI；不執行重新開機 |
-| 解除安裝登錄 | 已實作 | Windows Installed Apps／ARP、DisplayName／Version／Publisher／命令 |
+| 解除安裝登錄 | 已實作 | Windows Installed Apps／ARP、DisplayName／Version／Publisher／命令；`UninstallDisplayIcon` 寫入 `DisplayIcon`（限 `{app}` 內路徑） |
+| 安裝檔圖示 | 已實作（僅 Windows 主機） | `SetupIconFile` 驗證 `.ico` 後以 Win32 resource API 嵌入 stub 暫存副本（RT_ICON／RT_GROUP_ICON），再附加 payload；`unins000.exe` 沿用同圖示；非 Windows 主機編譯 EXE 會報錯，`--package-only` 忽略並警告 |
+| Stub CRT | 靜態連結 | MSVC 目標透過 `.cargo/config.toml` 啟用 `crt-static`，`ironsetup-stub.exe` 不匯入 vcruntime140.dll，可在未安裝 VC++ Redistributable 的乾淨電腦執行 |
 | rollback／恢復 | 已實作 | 寫前 journal、備份、鎖、recover；保留未解決的備份 |
 | 原地更新／降版 | 尚未實作 | 既有 journal 明確拒絕；先解除安裝 |
 | 刪除使用者修改資料 | 不自動執行 | 使用者修改的 payload 與未擁有檔案保留 |
