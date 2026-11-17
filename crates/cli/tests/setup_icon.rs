@@ -32,7 +32,10 @@ unsafe extern "system" fn collect(
     1
 }
 
-fn group_icon_ids(exe: &Path) -> Vec<usize> {
+const RT_GROUP_ICON: usize = 14;
+const RT_MANIFEST: usize = 24;
+
+fn resource_ids(exe: &Path, kind: usize) -> Vec<usize> {
     let wide: Vec<u16> = exe.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut ids = Vec::new();
     unsafe {
@@ -44,7 +47,7 @@ fn group_icon_ids(exe: &Path) -> Vec<usize> {
         assert!(!module.is_null(), "cannot load {}", exe.display());
         EnumResourceNamesW(
             module,
-            14 as *const u16,
+            kind as *const u16,
             Some(collect),
             &mut ids as *mut _ as isize,
         );
@@ -83,7 +86,13 @@ fn setup_icon_is_embedded_and_exe_still_inspects() {
         "{}",
         String::from_utf8_lossy(&out.stdout)
     );
-    let baseline = group_icon_ids(&plain.path().join("setup.exe"));
+    let baseline = resource_ids(&plain.path().join("setup.exe"), RT_GROUP_ICON);
+    // build.rs embeds the application manifest (asInvoker, ComCtl32 v6, ...).
+    assert_eq!(
+        resource_ids(&plain.path().join("setup.exe"), RT_MANIFEST),
+        vec![1],
+        "setup EXE must carry RT_MANIFEST #1"
+    );
 
     let out = compile(
         d.path(),
@@ -96,10 +105,16 @@ fn setup_icon_is_embedded_and_exe_still_inspects() {
         String::from_utf8_lossy(&out.stderr)
     );
     let exe = d.path().join("setup.exe");
-    let ids = group_icon_ids(&exe);
+    let ids = resource_ids(&exe, RT_GROUP_ICON);
     assert!(
         ids.contains(&1),
         "RT_GROUP_ICON id 1 missing: {ids:?} (baseline {baseline:?})"
+    );
+    // UpdateResource must add the icon without dropping the manifest.
+    assert_eq!(
+        resource_ids(&exe, RT_MANIFEST),
+        vec![1],
+        "SetupIconFile must keep RT_MANIFEST #1"
     );
     let inspect = Command::new(env!("CARGO_BIN_EXE_ironsetup"))
         .arg("inspect")

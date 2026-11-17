@@ -38,7 +38,7 @@ Runtime invocation used `/usr/lib/wine/wine64`, `DISPLAY=:96`, `WINEARCH=win64`,
 
 - Wine execution is not native Windows validation. UAC behavior, native Windows themes, high contrast interactions, monitor changes, screen readers, and Windows installer reputation were not validated here.
 - UI text is English in v0.1. Scripts and filenames use Unicode. The Wine test environment lacks CJK font glyphs, so the screenshot renders Chinese fixture text as missing-glyph boxes; exact Unicode native-control text and UTF-8 file round-trip assertions passed.
-- The host scales native controls/fonts to the system DPI at startup. Live per-monitor DPI changes are not implemented.
+- The IronSetup binaries embed an application manifest (crates/cli/ironsetup.manifest: asInvoker, ComCtl32 v6, PerMonitorV2, Windows 10/11, UTF-8 code page). The host scales controls/fonts to the system DPI at startup and rebuilds fonts/layout on WM_DPICHANGED; per-monitor moves have not been verified on a mixed-DPI multi-monitor setup. Hosts without that manifest (test harnesses) stay system-DPI aware and get ComCtl32 v6 from a runtime activation context.
 - The studio is a plain native source editor; it does not claim syntax highlighting, a Pascal debugger, or a full Inno Setup IDE clone.
 - The file and folder dialogs are implemented and cross-compiled. Their interactive workflows were not automated by this smoke test.
 

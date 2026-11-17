@@ -167,6 +167,7 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
     let control_release = release.clone();
     let driver = controller(ui_thread, release.clone(), move || unsafe {
         let hwnd = main_window()?;
+        assert_eq!(get_text(hwnd), "IronSetup UI Smoke 0.1 — Setup");
         title_is(hwnd, "Install IronSetup UI Smoke")?;
         command(hwnd, 27, 0);
         title_is(hwnd, "Before you install")?;
