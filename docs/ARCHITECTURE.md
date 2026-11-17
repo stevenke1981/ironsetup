@@ -38,7 +38,7 @@ SFX EXE：原始 stub → package bytes → u64 package 長度 → package SHA-2
 
 ## 寫入與恢復
 
-讀取完整封裝並驗證 → 選擇與平台預檢 → 取得排他鎖 → 建立 journal／原始備份 → 逐項寫入 → 標記 committed → 執行可選 `[Run]`。
+讀取完整封裝並驗證 → 選擇與平台預檢 →（同一 AppId 已安裝時：升級預檢 → 解除安裝舊版 → 重新規劃檔案；非原子）→ 取得排他鎖 → 建立 journal／原始備份 → 逐項寫入 → 標記 committed → 執行可選 `[Run]`（GUI 模式的 `postinstall` 項目延後到完成頁，由主機在精靈關閉後以 `run_postinstall` 執行）。
 
 每次檔案或 Registry 變更先持久記錄還原資訊。同步錯誤觸發 rollback；程序被中止後可用 `recover` 處理未完成 journal。原始備份只有在回復／解除安裝不再需要它時清理。已提交的 `[Run]` 外部副作用不在 rollback 範圍內。
 

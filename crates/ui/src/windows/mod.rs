@@ -4,7 +4,7 @@
 mod studio;
 mod wizard;
 
-use crate::{CompileCallback, InstallCallback, WizardSelection};
+use crate::{CompileCallback, InstallCallback, WizardOutcome, WizardSelection};
 use anyhow::{anyhow, bail, Context, Result};
 use ironsetup_core::Manifest;
 use std::{
@@ -589,10 +589,13 @@ pub fn installer_wizard(
     manifest: &Manifest,
     selections: WizardSelection,
     perform: InstallCallback,
-) -> Result<()> {
+) -> Result<WizardOutcome> {
     let title = format!("{} {} — Setup", manifest.app.name, manifest.app.version);
-    let app = wizard::Wizard::new(manifest.clone(), selections, perform)?;
-    unsafe { run_window(App::Wizard(Box::new(app)), &title, false) }
+    let finished = std::rc::Rc::new(RefCell::new(None));
+    let app = wizard::Wizard::new(manifest.clone(), selections, perform, finished.clone())?;
+    unsafe { run_window(App::Wizard(Box::new(app)), &title, false) }?;
+    let outcome = finished.borrow_mut().take();
+    outcome.ok_or_else(|| anyhow!("The wizard closed without recording its installation outcome"))
 }
 pub fn compiler_studio(initial_script: Option<PathBuf>, compile: CompileCallback) -> Result<()> {
     unsafe {

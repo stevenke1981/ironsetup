@@ -380,7 +380,39 @@ fn run_entries_are_explicit_and_conflicting_flags_fail() {
     );
     assert!(compile_error(&extra.replace("{app}\\app.exe", "cmd.exe"))
         .contains("must start with {app}"));
-    assert!(compile_error(&extra.replace("nowait", "postinstall")).contains("Unsupported flag"));
+    assert!(compile_error(&extra.replace("nowait", "shellexec")).contains("Unsupported flag"));
+}
+
+#[test]
+fn postinstall_requires_description_and_lowest_privileges() {
+    let d = fixture();
+    // The NotEdit installer's real entry.
+    let extra = "[Run]\nFilename: \"{app}\\app.exe\"; Description: \"啟動 NotEdit\"; Flags: nowait postinstall skipifsilent\n";
+    let c = compile_script(&script(d.path(), extra), &CompileOptions::default()).unwrap();
+    let run = &c.package.manifest.run[0];
+    assert_eq!(run.description, "啟動 NotEdit");
+    assert_eq!(run.flags, ["nowait", "postinstall", "skipifsilent"]);
+    let error = compile_error(&extra.replace("Description: \"啟動 NotEdit\"; ", ""));
+    assert!(
+        error.contains("test.iss:8") && error.contains("requires a Description"),
+        "{error}"
+    );
+    let admin = d.path().join("admin.iss");
+    fs::write(
+        &admin,
+        format!("{}{extra}", header().replace("=lowest", "=admin")),
+    )
+    .unwrap();
+    let error = compile_script(&admin, &CompileOptions::default())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("admin.iss:8") && error.contains("would start elevated"),
+        "{error}"
+    );
+    let five = "[Run]\n".to_owned()
+        + &"Filename: \"{app}\\app.exe\"; Description: \"Go\"; Flags: postinstall\n".repeat(5);
+    assert!(compile_error(&five).contains("At most 4 postinstall"));
 }
 
 #[test]
@@ -520,4 +552,99 @@ fn setup_rejects_unsupported_compression_architecture_and_default_roots() {
     }
     assert!(compile_error("[Setup]\nArchitecturesAllowed=x86\n").contains("Only x64compatible"));
     assert!(compile_error("[Setup]\nSolidCompression=yes\n").contains("not implemented"));
+}
+
+fn valid_ico() -> Vec<u8> {
+    let mut dib = vec![0u8; 48];
+    dib[0] = 40;
+    let mut b = vec![0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0];
+    b.extend_from_slice(&(dib.len() as u32).to_le_bytes());
+    b.extend_from_slice(&22u32.to_le_bytes());
+    b.extend_from_slice(&dib);
+    b
+}
+
+#[test]
+fn setup_icon_is_validated_and_returned_outside_the_manifest() {
+    let d = fixture();
+    fs::write(d.path().join("icon.ico"), valid_ico()).unwrap();
+    let s = script(
+        d.path(),
+        &format!("SetupIconFile=icon.ico\n{}", file_entry()),
+    );
+    let compiled = compile_script(&s, &CompileOptions::default()).unwrap();
+    assert!(compiled.setup_icon.unwrap().ends_with("icon.ico"));
+}
+
+#[test]
+fn setup_icon_missing_or_invalid_is_a_located_error() {
+    let m = compile_error("SetupIconFile=nope.ico\n");
+    assert!(
+        m.contains("test.iss:7:") && m.contains("Cannot read"),
+        "{m}"
+    );
+    let d = fixture();
+    fs::write(d.path().join("bad.ico"), b"not an icon at all").unwrap();
+    let e = compile_script(
+        &script(d.path(), "SetupIconFile=bad.ico\n"),
+        &CompileOptions::default(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(e.contains("Not an .ico"), "{e}");
+    let mut cursor = valid_ico();
+    cursor[2] = 2;
+    fs::write(d.path().join("cur.ico"), cursor).unwrap();
+    assert!(compile_script(
+        &script(d.path(), "SetupIconFile=cur.ico\n"),
+        &CompileOptions::default()
+    )
+    .is_err());
+}
+
+#[test]
+fn uninstall_display_icon_must_be_app_relative() {
+    for bad in [
+        "C:\\Windows\\x.exe",
+        "{pf}\\x.exe",
+        "{app}\\..\\x.exe",
+        "{app}",
+        "app.exe",
+    ] {
+        let m = compile_error(&format!("UninstallDisplayIcon={bad}\n"));
+        assert!(m.contains("test.iss:7:"), "{bad}: {m}");
+    }
+    let m = compile_error("Uninstallable=no\nUninstallDisplayIcon={app}\\app.txt\n");
+    assert!(m.contains("Uninstallable=yes"), "{m}");
+    let d = fixture();
+    let s = d.path().join("test.iss");
+    fs::write(
+        &s,
+        format!(
+            "{}UninstallDisplayIcon={{app}}\\app.txt\n{}",
+            header(),
+            file_entry()
+        ),
+    )
+    .unwrap();
+    let c = compile_script(&s, &CompileOptions::default()).unwrap();
+    assert_eq!(c.package.manifest.app.uninstall_icon, "{app}\\app.txt");
+    assert!(c
+        .warnings
+        .iter()
+        .all(|w| !w.message.contains("UninstallDisplayIcon")));
+    fs::write(
+        &s,
+        format!(
+            "{}UninstallDisplayIcon={{app}}\\other.exe\n{}",
+            header(),
+            file_entry()
+        ),
+    )
+    .unwrap();
+    let c = compile_script(&s, &CompileOptions::default()).unwrap();
+    assert!(c
+        .warnings
+        .iter()
+        .any(|w| w.message.contains("UninstallDisplayIcon")));
 }

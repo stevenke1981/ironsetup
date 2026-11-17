@@ -29,7 +29,7 @@ ironsetup_core::write_package_file(
 
 | Section | Supported values |
 | --- | --- |
-| `[Setup]` | `AppId`, `AppName`, `AppVersion`, `AppPublisher`, `DefaultDirName`, `DefaultGroupName`, `PrivilegesRequired`, `Uninstallable`, `Compression`, `SolidCompression=no`, `OutputDir`, `OutputBaseFilename`, `SourceDir`, `LicenseFile`, `InfoBeforeFile`, `InfoAfterFile`, `ArchitecturesAllowed=x64compatible` |
+| `[Setup]` | `AppId`, `AppName`, `AppVersion`, `AppPublisher`, `DefaultDirName`, `DefaultGroupName`, `PrivilegesRequired`, `Uninstallable`, `Compression`, `SolidCompression=no`, `OutputDir`, `OutputBaseFilename`, `SourceDir`, `LicenseFile`, `InfoBeforeFile`, `InfoAfterFile`, `ArchitecturesAllowed=x64compatible`, `SetupIconFile`, `UninstallDisplayIcon` |
 | `[Files]` | `Source`, `DestDir`, `DestName`, `Excludes`, `Flags`, `Components`, `Tasks` |
 | `[Dirs]` | `Name`, `Components`, `Tasks` |
 | `[Types]` | `Name`, `Description`, `Flags: iscustom` |
@@ -40,6 +40,8 @@ ironsetup_core::write_package_file(
 | `[Run]` | `Filename`, `Parameters`, `WorkingDir`, `Description`, `Flags`, `Components`, `Tasks` |
 
 Required setup directives are `AppName`, `AppVersion`, and `DefaultDirName`. `AppId` defaults to `AppName`, and `DefaultGroupName` defaults to `AppName`. `OutputDir` defaults to `Output` and relative paths resolve against `SourceDir`; `OutputBaseFilename` defaults to `setup`. `SourceDir` itself resolves against the main script directory.
+
+`SetupIconFile` (relative to `SourceDir`) must be a well-formed `.ico` (PNG or BMP images, at most 4 MiB); a missing or invalid file is a located error. The CLI embeds it as `RT_ICON`/`RT_GROUP_ICON` resources into a temporary copy of the stub before the payload is appended, so both the setup EXE and the installed `unins000.exe` carry the icon. Embedding uses the Win32 resource API and therefore requires a Windows host; building a non-package-only EXE with `SetupIconFile` elsewhere fails, and `--package-only` ignores it with a warning. `UninstallDisplayIcon` must be `{app}\relative\path[,index]` (no other roots, no `..`) and requires `Uninstallable=yes`; it is written as the `DisplayIcon` value of the Add/Remove Programs entry. A warning is emitted when no `[Files]` entry installs the referenced file.
 
 **Explicit differences:** `PrivilegesRequired` defaults to `lowest`, and compression defaults to `zip` (deflate). The compiler emits warnings when these defaults are implicit. Set both directives explicitly in production scripts. `Compression=none` is also supported; LZMA/LZMA2, solid compression, and compression-level suffixes are rejected.
 
@@ -61,7 +63,7 @@ Icon destinations start with `{group}`, `{userdesktop}`, `{autodesktop}`, or `{u
 
 Registry roots are `HKCU`, `HKLM`, or `HKA`; explicit `HKLM` requires `PrivilegesRequired=admin`. Types are `string`, `expandsz`, `dword`, `qword`, and `binary`. The only accepted flag is `uninsdeletevalue`. Integers accept decimal, `$HEX`, or `0xHEX` and are normalized to decimal; binary accepts hexadecimal pairs with optional whitespace. Subkeys and value names are literal. Duplicate value destinations are rejected. Runtime rollback/restoration behavior is specified by the engine.
 
-Run targets must be app-local. Flags are `skipifsilent`, `runhidden`, `nowait`, and `waituntilterminated`; `nowait` conflicts with `waituntilterminated`. `nowait` reports launch success only and emits a compiler warning. Arbitrary child program side effects cannot be rolled back. `postinstall`, `shellexec`, and `[UninstallRun]` are not supported.
+Run targets must be app-local. Flags are `skipifsilent`, `runhidden`, `nowait`, `waituntilterminated`, and `postinstall`; `nowait` conflicts with `waituntilterminated`. `nowait` reports launch success only and emits a compiler warning. Arbitrary child program side effects cannot be rolled back. `postinstall` requires a non-empty `Description` (the finish-page checkbox label), is rejected with `PrivilegesRequired=admin` (the program would start elevated), and is limited to 4 entries. In the wizard each enabled `postinstall` entry is a checked checkbox on the success page and runs only if still checked at Finish; in silent mode it runs as before unless it is also `skipifsilent`. The `unchecked` flag, `shellexec`, and `[UninstallRun]` are not supported.
 
 Supported runtime constants are `{app}`, `{group}`, `{userdesktop}`, `{autodesktop}`, `{userprograms}`, `{localappdata}`, `{userappdata}`, `{userpf}`, `{autopf}`, `{pf}`, `{pf64}`, and `{uninstallexe}`. A literal opening brace in supported dynamic strings uses `{{`. The allowed subset is narrower for default install paths, file paths, shortcuts, and run targets. Unknown constants, including `{code:...}`, fail explicitly.
 
