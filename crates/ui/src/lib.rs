@@ -19,8 +19,47 @@ pub struct WizardSelection {
     pub tasks: BTreeSet<String>,
 }
 
+/// A `postinstall` [Run] entry offered as a checked finish-page checkbox.
+/// `index` refers to `manifest.run`; the host runs the chosen ones.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PostInstallOption {
+    pub index: usize,
+    pub description: String,
+}
+
+/// What a successful installer callback reports to the wizard.
+#[derive(Clone, Debug, Default)]
+pub struct InstallOutcome {
+    pub details: String,
+    /// Offered only on the success page; empty when nothing is deferred.
+    pub postinstall: Vec<PostInstallOption>,
+}
+impl From<String> for InstallOutcome {
+    fn from(details: String) -> Self {
+        Self {
+            details,
+            postinstall: Vec::new(),
+        }
+    }
+}
+impl From<&str> for InstallOutcome {
+    fn from(details: &str) -> Self {
+        details.to_owned().into()
+    }
+}
+
+/// Returned after a successful installation when the wizard closes.
+#[derive(Clone, Debug)]
+pub struct WizardOutcome {
+    /// The selection that was installed.
+    pub selection: WizardSelection,
+    /// `manifest.run` indices of postinstall entries left checked at Finish.
+    /// The host must run them itself, on its own thread, after the wizard.
+    pub postinstall: Vec<usize>,
+}
+
 pub type InstallCallback =
-    Box<dyn FnOnce(WizardSelection, Box<dyn Fn(Progress) + Send>) -> Result<String> + Send>;
+    Box<dyn FnOnce(WizardSelection, Box<dyn Fn(Progress) + Send>) -> Result<InstallOutcome> + Send>;
 pub type CompileCallback = Box<dyn Fn(PathBuf) -> Result<String> + Send + Sync>;
 
 /// Expected wizard outcomes are distinguishable from window startup failures.
@@ -68,7 +107,7 @@ pub fn installer_wizard(
     manifest: &Manifest,
     default_dir: &Path,
     perform: InstallCallback,
-) -> Result<()> {
+) -> Result<WizardOutcome> {
     let (components, tasks) = flow::default_selections(manifest, None)?;
     installer_wizard_with_selections(
         manifest,
@@ -85,7 +124,7 @@ pub fn installer_wizard_with_selections(
     manifest: &Manifest,
     selections: WizardSelection,
     perform: InstallCallback,
-) -> Result<()> {
+) -> Result<WizardOutcome> {
     #[cfg(windows)]
     {
         windows::installer_wizard(manifest, selections, perform)

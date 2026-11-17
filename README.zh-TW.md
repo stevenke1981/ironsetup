@@ -101,6 +101,8 @@ Name: "{group}\My App"; Filename: "{app}\MyApp.exe"
 
 支援 ISCC 常見短參數形狀：`/Q`、`/O目錄`、`/F名稱`、`/DName=value`；並非所有 ISCC 參數都相容。`/SILENT` 與 `/VERYSILENT` 在 v0.1 都完全隱藏精靈。`/LOG=完整路徑` 建立新記錄檔；如果已存在則拒絕覆寫。安裝程式不會自動重開機。
 
+安裝程式參數不分大小寫，前綴可用 `/`、`-` 或 `--`（例如 `-VERYSILENT`、`-DIR=C:\Apps\Demo`）。在 Git Bash（MSYS）中直接輸入 `/VERYSILENT` 會被路徑轉換改寫成 `C:/Program Files/Git/VERYSILENT`；安裝程式會偵測這種形狀並明確報錯（不會默默接受），請改用 PowerShell／cmd.exe、`-` 前綴，或先設定 `MSYS_NO_PATHCONV=1`（MSYS2：`MSYS2_ARG_CONV_EXCL='*'`）。被改寫的 `/SILENT`／`/VERYSILENT` 仍視為靜默執行，錯誤只輸出到 stderr，不跳出對話框。
+
 CLI 結束碼：`0` 成功、`2` 命令或操作失敗、`3` verify 偵測到遺失／修改的檔案。獨立安裝精靈：`0` 成功、`1` 失敗、`2` 使用者取消。Windows 自身解除安裝會先啟動暫存副本；原始 launcher 的 `0` 表示成功啟動副本，需要精準同步結束碼時使用外部 `ironsetup uninstall`。
 
 ## 安裝／解除安裝資料
@@ -113,11 +115,11 @@ CLI 結束碼：`0` 成功、`2` 命令或操作失敗、`3` verify 偵測到遺
 
 ## 已知界線
 
-- **原地升級／重複安裝尚未實作**：同一安裝資料夾有有效 journal 時會拒絕；先解除安裝，再安裝新版本。
+- **原地升級為最小子集**：安裝資料夾已有同一 AppId 的已提交安裝時，先預檢（程式執行中鎖住檔案會提示「關閉應用程式」，不做任何變更），再解除安裝舊版、安裝新版。此流程**非原子**：舊版移除後若新版安裝失敗，舊版不會還原（Ready 頁會提示）。不同 AppId 或未完成交易仍拒絕。
 - Pascal `[Code]`、完整 ISPP、LZMA/LZMA2、solid compression、加密、密碼、網路下載、服務／驅動程式安裝、重開機置換、DLL／字型註冊、多語系訊息檔、32-bit／ARM64 原生 stub 尚未實作。
 - 輸出 EXE／`.ispkg` 是 IronSetup 格式，不與 Inno Setup 二進位格式互通；`.ispkg` 也不是標準 ZIP 檔。
 - payload 上限 **512 MiB、100,000 個檔案**；目前整包處理於記憶體，適合中小型應用程式。
-- `[Run]` 在安裝交易提交後執行。外部程式的副作用無法回復；失敗會列入 warnings。`nowait` 只確認啟動。
+- `[Run]` 在安裝交易提交後執行。外部程式的副作用無法回復；失敗會列入 warnings。`nowait` 只確認啟動。`postinstall` 項目（必須有 `Description`，不可搭配 `PrivilegesRequired=admin`）在精靈成功頁顯示為預設勾選的核取方塊，按「Finish」後才執行；靜默安裝照常執行，除非同時有 `skipifsilent`。
 - 暫存解除安裝副本可能留在 Windows Temp；這不影響已安裝應用的移除。
 - 原生 Windows 實機、UAC 互動、高 DPI 多螢幕、SmartScreen、權限受限帳號與斷電狀況仍需目標機驗收。
 

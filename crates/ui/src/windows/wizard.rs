@@ -1,8 +1,11 @@
 use super::*;
 use crate::flow::{self, Page};
-use ironsetup_core::{evaluate_condition, Progress};
+use crate::{InstallOutcome, PostInstallOption, WizardOutcome};
+use ironsetup_core::{evaluate_condition, Progress, MAX_POSTINSTALL, STATE_DIR};
 use std::{
+    cell::RefCell,
     collections::BTreeSet,
+    rc::Rc,
     sync::mpsc::{self, Receiver},
     thread,
 };
@@ -27,10 +30,13 @@ const BACK: u16 = 26;
 const NEXT: u16 = 27;
 const CANCEL: u16 = 28;
 const FOOTER: u16 = 29;
+/// Finish-page checkboxes use ids POSTINSTALL..POSTINSTALL + MAX_POSTINSTALL.
+const POSTINSTALL: u16 = 40;
+const CHECK_ROW: i32 = 30;
 
 enum WorkerEvent {
     Progress(Progress),
-    Finished(std::result::Result<String, String>),
+    Finished(std::result::Result<InstallOutcome, String>),
 }
 
 pub(super) struct Wizard {
@@ -45,6 +51,9 @@ pub(super) struct Wizard {
     outcome: Option<std::result::Result<(), String>>,
     finish_text: String,
     combo_types: Vec<Option<String>>,
+    /// Postinstall entries offered on the success page, in checkbox order.
+    offered: Vec<PostInstallOption>,
+    finished: Rc<RefCell<Option<WizardOutcome>>>,
 }
 
 impl Wizard {
@@ -52,8 +61,25 @@ impl Wizard {
         manifest: Manifest,
         selection: WizardSelection,
         perform: InstallCallback,
+        finished: Rc<RefCell<Option<WizardOutcome>>>,
     ) -> Result<Self> {
         let route = flow::pages(&manifest);
+        let postinstall = manifest
+            .run
+            .iter()
+            .filter(|r| r.flags.iter().any(|f| f == "postinstall"))
+            .collect::<Vec<_>>();
+        if postinstall.len() > MAX_POSTINSTALL {
+            bail!("The native wizard supports at most {MAX_POSTINSTALL} postinstall entries");
+        }
+        for entry in postinstall {
+            if entry.description.trim().is_empty()
+                || entry.description.contains('\0')
+                || entry.description.len() > TEXT_LIMIT
+            {
+                bail!("A postinstall entry has no description that can be displayed safely");
+            }
+        }
         for (label, value) in [
             ("Application name", Some(manifest.app.name.as_str())),
             ("Version", Some(manifest.app.version.as_str())),
@@ -107,6 +133,8 @@ impl Wizard {
             outcome: None,
             finish_text: String::new(),
             combo_types: vec![],
+            offered: vec![],
+            finished,
         })
     }
     fn h(&self, id: u16) -> HWND {
@@ -322,6 +350,28 @@ impl Wizard {
                 place(self.h(id), fonts, x, y, w, h);
             }
         }
+        // Finish-page options sit below a shortened result text.
+        let rows = self.offered.len() as i32;
+        if rows > 0 {
+            place(
+                self.h(BODY),
+                fonts,
+                32,
+                166,
+                width - 64,
+                height - 290 - rows * CHECK_ROW,
+            );
+            for row in 0..rows {
+                place(
+                    self.h(POSTINSTALL + row as u16),
+                    fonts,
+                    32,
+                    height - 104 - (rows - 1 - row) * CHECK_ROW,
+                    width - 64,
+                    28,
+                );
+            }
+        }
     }
 
     unsafe fn render(&mut self, hwnd: HWND) -> Result<()> {
@@ -343,6 +393,13 @@ impl Wizard {
             FOOTER,
         ] {
             visible(self.h(id), false);
+        }
+        let success = self.outcome.as_ref().is_some_and(Result::is_ok);
+        for row in 0..self.offered.len() {
+            visible(
+                self.h(POSTINSTALL + row as u16),
+                page == Page::Complete && success,
+            );
         }
         let (title, subtitle) = match page {
             Page::Welcome => (
@@ -493,16 +550,30 @@ impl Wizard {
             }
         }
         let mut run_count = 0usize;
+        let mut optional = 0usize;
         for action in &self.manifest.run {
             if evaluate_condition(&action.conditions.components, &self.selection.components)?
                 && evaluate_condition(&action.conditions.tasks, &self.selection.tasks)?
             {
                 run_count += 1;
+                if action.flags.iter().any(|f| f == "postinstall") {
+                    optional += 1;
+                }
             }
         }
-        Ok(format!("Application: {} {}\r\n\r\nDestination:\r\n{}\r\n\r\nSelected files: {files}\r\nUncompressed size: {:.2} MiB\r\n\r\nComponents: {}\r\nTasks: {}\r\n\r\nPrograms configured to run after installation: {run_count}",
+        let mut text = format!("Application: {} {}\r\n\r\nDestination:\r\n{}\r\n\r\nSelected files: {files}\r\nUncompressed size: {:.2} MiB\r\n\r\nComponents: {}\r\nTasks: {}\r\n\r\nPrograms configured to run after installation: {run_count}",
             self.manifest.app.name, self.manifest.app.version, self.selection.target_dir.display(), bytes as f64 / 1_048_576.0,
-            list_names(&self.selection.components), list_names(&self.selection.tasks)))
+            list_names(&self.selection.components), list_names(&self.selection.tasks));
+        if optional > 0 {
+            text.push_str(&format!(
+                " ({optional} offered as options when setup finishes)"
+            ));
+        }
+        if self.selection.target_dir.join(STATE_DIR).exists() {
+            text.push_str(&format!("\r\n\r\nAn existing IronSetup installation was found in this folder. If it is {} (same AppId), it will be upgraded in place: the installed version is uninstalled first, then this version is installed. Close {} before continuing. The upgrade is not atomic: if installing this version fails after the old one was removed, the old version is not restored. An installation of a different application, or an interrupted one, is refused without changes.",
+                self.manifest.app.name, self.manifest.app.name));
+        }
+        Ok(text)
     }
 
     unsafe fn sync_lists(&mut self) -> Result<()> {
@@ -605,7 +676,10 @@ impl Wizard {
             }
             NEXT | 1 => {
                 match self.page() {
-                    Page::Complete => return Ok(Action::Close),
+                    Page::Complete => {
+                        self.record_postinstall();
+                        return Ok(Action::Close);
+                    }
                     Page::License if !self.accepted => {
                         bail!("Accept the license agreement before continuing.")
                     }
@@ -670,7 +744,42 @@ impl Wizard {
         Ok(())
     }
 
-    pub(super) unsafe fn poll(&mut self, hwnd: HWND, _fonts: &Fonts) -> Result<Action> {
+    /// Store the checked finish-page options for the host.
+    unsafe fn record_postinstall(&mut self) {
+        let chosen = self
+            .offered
+            .iter()
+            .enumerate()
+            .filter(|(row, _)| {
+                SendMessageW(self.h(POSTINSTALL + *row as u16), BM_GETCHECK, 0, 0)
+                    == BST_CHECKED as isize
+            })
+            .map(|(_, option)| option.index)
+            .collect();
+        if let Some(outcome) = self.finished.borrow_mut().as_mut() {
+            outcome.postinstall = chosen;
+        }
+    }
+
+    /// Reject offers that do not match this manifest's postinstall entries.
+    fn check_offers(&self, offers: &[PostInstallOption]) -> std::result::Result<(), String> {
+        if offers.len() > MAX_POSTINSTALL {
+            return Err(format!("more than {MAX_POSTINSTALL} options"));
+        }
+        let mut seen = BTreeSet::new();
+        for offer in offers {
+            let valid = self.manifest.run.get(offer.index).is_some_and(|entry| {
+                entry.flags.iter().any(|f| f == "postinstall")
+                    && entry.description == offer.description
+            });
+            if !valid || !seen.insert(offer.index) {
+                return Err(format!("invalid option {}", offer.index));
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) unsafe fn poll(&mut self, hwnd: HWND, fonts: &Fonts) -> Result<Action> {
         let Some(receiver) = &self.receiver else {
             return Ok(Action::None);
         };
@@ -705,13 +814,37 @@ impl Wizard {
         if let Some(result) = finished {
             self.receiver = None;
             match result {
-                Ok(details) => {
+                Ok(result) => {
                     self.outcome = Some(Ok(()));
-                    self.finish_text = details;
+                    self.finish_text = result.details;
                     if let Some(after) = &self.manifest.info_after {
                         self.finish_text.push_str("\r\n\r\n");
                         self.finish_text.push_str(after);
                     }
+                    *self.finished.borrow_mut() = Some(WizardOutcome {
+                        selection: self.selection.clone(),
+                        postinstall: Vec::new(),
+                    });
+                    match self.check_offers(&result.postinstall) {
+                        Ok(()) => self.offered = result.postinstall,
+                        Err(reason) => self.finish_text.push_str(&format!(
+                            "\r\n\r\nPrograms to run after setup are not offered ({reason}). Start the application from its shortcut."
+                        )),
+                    }
+                    for (row, option) in self.offered.iter().enumerate() {
+                        let id = POSTINSTALL + row as u16;
+                        control(
+                            hwnd,
+                            &mut self.controls,
+                            fonts,
+                            id,
+                            "BUTTON",
+                            &option.description,
+                            BS_AUTOCHECKBOX as u32 | WS_TABSTOP,
+                        )?;
+                        SendMessageW(self.h(id), BM_SETCHECK, BST_CHECKED as usize, 0);
+                    }
+                    self.layout(hwnd, fonts);
                     SendMessageW(self.h(PROGRESS), PBM_SETPOS, 1000, 0);
                 }
                 Err(error) => {
@@ -735,6 +868,9 @@ impl Wizard {
             return Ok(Action::None);
         }
         if self.page() == Page::Complete {
+            // Closing the finished wizard keeps the user's checkbox choices,
+            // the same as Finish.
+            self.record_postinstall();
             return Ok(Action::Close);
         }
         if dialog(

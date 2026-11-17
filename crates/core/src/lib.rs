@@ -4,7 +4,7 @@ pub mod paths;
 pub mod selection;
 pub use bundle::{
     append_package, decode_package, encode_package, read_embedded_package, read_package_file,
-    stub_bytes, validate_package, write_package_file,
+    stub_bytes, validate_package, write_package_file, MAX_POSTINSTALL,
 };
 pub use model::*;
 pub use paths::{checked_join, reject_symlink_ancestors, validate_relative_path};

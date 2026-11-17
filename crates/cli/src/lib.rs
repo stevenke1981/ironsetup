@@ -232,6 +232,62 @@ fn names(value: &str) -> Result<BTreeSet<String>> {
         })
         .collect()
 }
+const SETUP_SWITCHES: &[&str] = &[
+    "dir",
+    "target-dir",
+    "components",
+    "tasks",
+    "type",
+    "silent",
+    "verysilent",
+    "very-silent",
+    "no-run",
+    "uninstall",
+    "confirmed",
+    "parent-pid",
+    "log",
+    "sp-",
+    "norestart",
+    "suppressmsgboxes",
+];
+
+/// Git Bash (MSYS) rewrites a leading-slash argument such as `/VERYSILENT` or
+/// `/DIR=C:\App` into a path under its install root, e.g.
+/// `C:/Program Files/Git/VERYSILENT`. Returns the switch name when `arg` has
+/// that shape: an absolute drive path below a Git/MSYS directory whose last
+/// component (before any `=value`) is a known installer switch.
+fn msys_mangled_switch(arg: &str) -> Option<String> {
+    let name_part = arg.split_once('=').map_or(arg, |(name, _)| name);
+    let bytes = name_part.as_bytes();
+    if bytes.len() < 4
+        || !bytes[0].is_ascii_alphabetic()
+        || bytes[1] != b':'
+        || !matches!(bytes[2], b'/' | b'\\')
+    {
+        return None;
+    }
+    let split = name_part.rfind(['/', '\\'])?;
+    let (root, switch) = (&name_part[..split], &name_part[split + 1..]);
+    let switch = switch.to_ascii_lowercase();
+    let msys_root = root.split(['/', '\\']).any(|part| {
+        let part = part.to_ascii_lowercase();
+        part == "git" || part.starts_with("msys")
+    });
+    (msys_root && SETUP_SWITCHES.contains(&switch.as_str())).then_some(switch)
+}
+
+/// True when the arguments request a silent run, including an MSYS-mangled
+/// `/SILENT` or `/VERYSILENT`, so a host can avoid modal error dialogs.
+pub fn wants_silent(args: &[String]) -> bool {
+    args.iter().any(|a| {
+        let key = a.trim_start_matches(['-', '/']).to_ascii_lowercase();
+        let mangled = msys_mangled_switch(a);
+        matches!(key.as_str(), "silent" | "verysilent" | "very-silent")
+            || matches!(mangled.as_deref(), Some("silent" | "verysilent"))
+    })
+}
+
+/// Switches are case-insensitive and may start with `/`, `-` or `--`.
 fn parse_setup(args: &[String]) -> Result<SetupArgs> {
     let mut s = SetupArgs::default();
     let mut i = 0;
@@ -284,7 +340,12 @@ fn parse_setup(args: &[String]) -> Result<SetupArgs> {
             "sp-" | "norestart" | "suppressmsgboxes" => {
                 ensure!(inline.is_none(), "{a} does not accept a value")
             }
-            _ => bail!("Unknown installer option: {a}"),
+            _ => {
+                if let Some(switch) = msys_mangled_switch(a) {
+                    bail!("Installer option '{a}' looks like '/{}' rewritten by Git Bash (MSYS) path conversion. Run setup from PowerShell or cmd.exe, use '-{}' instead, or set MSYS_NO_PATHCONV=1 (MSYS2: MSYS2_ARG_CONV_EXCL='*') before running it", switch.to_ascii_uppercase(), switch.to_ascii_uppercase());
+                }
+                bail!("Unknown installer option: {a}")
+            }
         }
         i += 1;
     }
@@ -373,17 +434,30 @@ fn perform_install(
     log: &Log,
     progress: &mut dyn FnMut(Progress),
 ) -> Result<String> {
+    perform_install_report(package, args, target, stub, false, log, progress)
+        .and_then(|report| Ok(serde_json::to_string_pretty(&report)?))
+}
+
+fn perform_install_report(
+    package: &Package,
+    args: &SetupArgs,
+    target: PathBuf,
+    stub: &Path,
+    defer_postinstall: bool,
+    log: &Log,
+    progress: &mut dyn FnMut(Progress),
+) -> Result<ironsetup_engine::InstallReport> {
     ironsetup_core::validate_package(package)?;
-    let options = install_options(args, target, stub)?;
+    let mut options = install_options(args, target, stub)?;
+    options.defer_postinstall = defer_postinstall;
     let result = ironsetup_engine::install(package, &options, &mut |p| {
         log.progress(&p);
         progress(p);
     });
     match result {
         Ok(report) => {
-            let s = serde_json::to_string_pretty(&report)?;
-            log.line(&s);
-            Ok(s)
+            log.line(&serde_json::to_string_pretty(&report)?);
+            Ok(report)
         }
         Err(e) => {
             log.line(&format!("ERROR: {e:#}"));
@@ -630,27 +704,68 @@ pub fn stub_main(args: Vec<String>) -> Result<i32> {
             components: s.components.clone().unwrap_or(default_components),
             tasks: s.tasks.clone().unwrap_or(default_tasks),
         };
-        let manifest = package.manifest.clone();
+        let package = Arc::new(package);
+        let worker_package = package.clone();
+        let worker_log = log.clone();
         let outcome = ironsetup_ui::installer_wizard_with_selections(
-            &manifest,
+            &package.manifest,
             selection,
             Box::new(move |selected, notify| {
                 let mut chosen = s.clone();
                 chosen.components = Some(selected.components);
                 chosen.tasks = Some(selected.tasks);
                 chosen.setup_type = None;
-                perform_install(
-                    &package,
+                let report = perform_install_report(
+                    &worker_package,
                     &chosen,
                     selected.target_dir,
                     &exe,
-                    &log,
+                    true,
+                    &worker_log,
                     &mut |p| notify(p),
-                )
+                )?;
+                let postinstall = report
+                    .postinstall
+                    .iter()
+                    .map(|index| ironsetup_ui::PostInstallOption {
+                        index: *index,
+                        description: worker_package.manifest.run[*index].description.clone(),
+                    })
+                    .collect();
+                Ok(ironsetup_ui::InstallOutcome {
+                    details: serde_json::to_string_pretty(&report)?,
+                    postinstall,
+                })
             }),
         );
         match outcome {
-            Ok(()) => Ok(0),
+            Ok(finished) => {
+                // Chosen finish-page programs start on this (UI host) thread
+                // after the wizard closed, never from the install worker.
+                if !finished.postinstall.is_empty() {
+                    match ironsetup_engine::run_postinstall(
+                        &package,
+                        &finished.selection.target_dir,
+                        &finished.selection.components,
+                        &finished.selection.tasks,
+                        &finished.postinstall,
+                    ) {
+                        Ok(report) => {
+                            log.line(&serde_json::to_string_pretty(&report)?);
+                            if !report.failures.is_empty() {
+                                ironsetup_ui::show_error(&report.failures.join("\n"));
+                            }
+                        }
+                        Err(error) => {
+                            log.line(&format!("ERROR: {error:#}"));
+                            ironsetup_ui::show_error(&format!(
+                                "The installation is complete, but the selected programs were not started: {error:#}"
+                            ));
+                        }
+                    }
+                }
+                Ok(0)
+            }
             Err(error) if ironsetup_ui::is_cancelled(&error) => Ok(2),
             Err(error) if ironsetup_ui::is_operation_reported(&error) => Ok(1),
             Err(error) => Err(error),
@@ -692,6 +807,52 @@ mod tests {
         assert_eq!(s.components.unwrap().len(), 2);
         assert!(s.tasks.unwrap().is_empty());
         assert_eq!(s.dir.unwrap(), PathBuf::from("C:\\Demo App"));
+    }
+    #[test]
+    fn dash_prefixed_switches_are_case_insensitive_aliases() {
+        let s = parse_setup(&args(&[
+            "-VERYSILENT",
+            "-Dir=C:\\Demo",
+            "-components=core",
+            "-NoRun",
+        ]))
+        .unwrap_err();
+        assert!(s.to_string().contains("-NoRun"));
+        let s = parse_setup(&args(&[
+            "-VerySilent",
+            "-DIR=C:\\Demo",
+            "-tasks=",
+            "--no-run",
+        ]))
+        .unwrap();
+        assert!(s.silent && s.no_run);
+        assert_eq!(s.dir.unwrap(), PathBuf::from("C:\\Demo"));
+        assert!(s.tasks.unwrap().is_empty());
+        assert!(wants_silent(&args(&["-verysilent"])));
+        assert!(wants_silent(&args(&["/SILENT"])));
+        assert!(!wants_silent(&args(&["-dir=C:\\silent"])));
+    }
+    #[test]
+    fn msys_mangled_switches_get_an_explanation() {
+        for mangled in [
+            "C:/Program Files/Git/VERYSILENT",
+            "C:/Program Files/Git/DIR=C:\\Demo App",
+            "D:\\tools\\msys64\\SUPPRESSMSGBOXES",
+        ] {
+            let error = parse_setup(&args(&[mangled])).unwrap_err().to_string();
+            assert!(error.contains("Git Bash"), "{error}");
+            assert!(error.contains("MSYS_NO_PATHCONV=1"), "{error}");
+        }
+        assert!(wants_silent(&args(&["C:/Program Files/Git/VERYSILENT"])));
+        // Other absolute paths, or unknown names under Git, stay plain errors.
+        for other in [
+            "C:/Apps/VERYSILENT",
+            "C:/Program Files/Git/TYPO",
+            "C:/Program Files/Git",
+        ] {
+            let error = parse_setup(&args(&[other])).unwrap_err().to_string();
+            assert!(error.contains("Unknown installer option"), "{error}");
+        }
     }
     #[test]
     fn invalid_cli_never_silently_ignored() {
