@@ -442,6 +442,88 @@ unsafe fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRES
     0
 }
 
+const COMMON_CONTROLS_V6_MANIFEST: &str = concat!(
+    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+    r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">"#,
+    r#"<dependency><dependentAssembly><assemblyIdentity type="win32" "#,
+    r#"name="Microsoft.Windows.Common-Controls" version="6.0.0.0" "#,
+    r#"processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>"#,
+    r#"</dependentAssembly></dependency></assembly>"#,
+);
+
+/// Activation context selecting ComCtl32 v6 for the UI thread.
+///
+/// The IronSetup binaries (and test harnesses that host this UI) carry no
+/// application manifest, so Windows binds them to the legacy ComCtl32 5.82,
+/// which rejects `ICC_STANDARD_CLASSES` and lacks visual styles. Activating
+/// the dependency at runtime keeps every toolchain (MSVC, MinGW, cross builds)
+/// working without a resource compiler. Failure degrades to ComCtl32 5.x.
+struct CommonControlsV6 {
+    context: HANDLE,
+    cookie: usize,
+}
+impl CommonControlsV6 {
+    unsafe fn activate() -> Option<Self> {
+        use std::io::Write;
+        use windows_sys::Win32::System::ApplicationInstallationAndServicing::{
+            ActivateActCtx, CreateActCtxW, ReleaseActCtx, ACTCTXW,
+        };
+        // CreateActCtxW parses the manifest during the call, so the file is
+        // only needed briefly. create_new refuses a pre-planted file.
+        let path = std::env::temp_dir().join(format!(
+            "ironsetup-comctl6-{}-{}.manifest",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let written = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .and_then(|mut f| f.write_all(COMMON_CONTROLS_V6_MANIFEST.as_bytes()));
+        if written.is_err() {
+            let _ = std::fs::remove_file(&path);
+            return None;
+        }
+        let source = path_wide(&path);
+        let request = ACTCTXW {
+            cbSize: size_of::<ACTCTXW>() as u32,
+            dwFlags: 0,
+            lpSource: source.as_ptr(),
+            wProcessorArchitecture: 0,
+            wLangId: 0,
+            lpAssemblyDirectory: null(),
+            lpResourceName: null(),
+            lpApplicationName: null(),
+            hModule: null_mut(),
+        };
+        let context = CreateActCtxW(&request);
+        let _ = std::fs::remove_file(&path);
+        if context == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let mut cookie = 0;
+        if ActivateActCtx(context, &mut cookie) == 0 {
+            ReleaseActCtx(context);
+            return None;
+        }
+        Some(Self { context, cookie })
+    }
+}
+impl Drop for CommonControlsV6 {
+    fn drop(&mut self) {
+        use windows_sys::Win32::System::ApplicationInstallationAndServicing::{
+            DeactivateActCtx, ReleaseActCtx,
+        };
+        unsafe {
+            DeactivateActCtx(0, self.cookie);
+            ReleaseActCtx(self.context);
+        }
+    }
+}
+
 unsafe fn run_window(app: App, title: &str, studio: bool) -> Result<()> {
     // System-DPI aware controls and fonts. Per-monitor DPI transitions are a
     // documented limitation of this initial native host.
@@ -458,12 +540,20 @@ unsafe fn run_window(app: App, title: &str, studio: bool) -> Result<()> {
         }
     }
     let _com = ComGuard(com_result >= 0);
-    let common = INITCOMMONCONTROLSEX {
+    // Must be active before InitCommonControlsEx and before any control is
+    // created, and stay active for the whole message loop.
+    let _visual_styles = CommonControlsV6::activate();
+    let mut common = INITCOMMONCONTROLSEX {
         dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
         dwICC: ICC_PROGRESS_CLASS | ICC_STANDARD_CLASSES,
     };
     if InitCommonControlsEx(&common) == 0 {
-        bail!("Cannot initialize native Windows controls");
+        // ComCtl32 5.x rejects ICC_STANDARD_CLASSES. The standard classes are
+        // registered by user32 there, so only the progress bar is required.
+        common.dwICC = ICC_PROGRESS_CLASS;
+        if InitCommonControlsEx(&common) == 0 {
+            bail!("Cannot initialize native Windows controls");
+        }
     }
     let instance = GetModuleHandleW(null());
     let class = wide("IronSetup.Native.Window.v1");
