@@ -103,6 +103,21 @@ fn controller(
     })
 }
 
+/// Joins the UI call's result with its controller's. When both fail, both
+/// errors are reported: a UI that fails before showing its window must not be
+/// masked by the controller's "Timed out waiting for the test window", and a
+/// controller failure (which quits the UI) must not hide behind "cancelled".
+fn both<T>(ui: &str, ui_result: Result<T>, driver_result: Result<()>) -> Result<T> {
+    match (ui_result, driver_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), Ok(())) => Err(error.context(format!("{ui} failed"))),
+        (Ok(_), Err(error)) => Err(error.context(format!("{ui} controller failed"))),
+        (Err(ui_error), Err(driver_error)) => {
+            bail!("{ui} failed: {ui_error:#}\n{ui} controller failed: {driver_error:#}")
+        }
+    }
+}
+
 fn fixture() -> Manifest {
     let choice = |name: &str, types: &[&str], flags: &[&str]| Choice {
         name: name.into(),
@@ -152,6 +167,7 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
     let control_release = release.clone();
     let driver = controller(ui_thread, release.clone(), move || unsafe {
         let hwnd = main_window()?;
+        assert_eq!(get_text(hwnd), "IronSetup UI Smoke 0.1 — Setup");
         title_is(hwnd, "Install IronSetup UI Smoke")?;
         command(hwnd, 27, 0);
         title_is(hwnd, "Before you install")?;
@@ -180,7 +196,18 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
             GetWindowThreadProcessId(popup, &mut process);
             (process == GetCurrentProcessId()).then_some(popup)
         })?;
-        PostMessageW(popup, WM_COMMAND, IDOK as usize, 0);
+        assert!(
+            get_text(child(popup, 0xffff)).contains("Accept the license agreement"),
+            "license-gate error text"
+        );
+        // Real Windows gives an MB_OK box's only button the ID IDCANCEL (so
+        // Esc closes it); Wine uses IDOK. Press whichever button exists.
+        let (id, button) = [IDOK, IDCANCEL]
+            .into_iter()
+            .map(|id| (id, child(popup, id)))
+            .find(|(_, button)| !button.is_null())
+            .context("license-gate error dialog has no OK button")?;
+        PostMessageW(popup, WM_COMMAND, id as usize, button as isize);
         wait_until("license popup to close", || {
             (IsWindow(popup) == 0).then_some(())
         })?;
@@ -294,10 +321,10 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
             })
         }),
     );
-    driver
+    let driver_result = driver
         .join()
-        .map_err(|_| anyhow!("wizard controller join failed"))??;
-    let wizard_outcome = wizard_result?;
+        .map_err(|_| anyhow!("wizard controller join failed"))?;
+    let wizard_outcome = both("installer_wizard", wizard_result, driver_result)?;
     assert_eq!(
         wizard_outcome.postinstall,
         vec![0],
@@ -371,10 +398,10 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
             Ok("SMOKE BUILD COMPLETE\nSMOKE BUILD WARNING: this is a GUI fixture, not a real compilation".into())
         }),
     );
-    driver
+    let driver_result = driver
         .join()
-        .map_err(|_| anyhow!("studio controller join failed"))??;
-    studio_result?;
+        .map_err(|_| anyhow!("studio controller join failed"))?;
+    both("compiler_studio", studio_result, driver_result)?;
     assert_eq!(fs::read_to_string(script)?, changed_text);
     println!(
         "PASS studio UTF-8 edit/save, F9, threaded build, busy close, completion and warning log"

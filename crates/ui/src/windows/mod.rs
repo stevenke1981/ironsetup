@@ -45,16 +45,17 @@ pub(super) struct Fonts {
     dpi: i32,
 }
 impl Fonts {
-    unsafe fn new() -> Self {
+    unsafe fn system_dpi() -> i32 {
         let dc = GetDC(null_mut());
-        let dpi = if dc.is_null() {
-            96
-        } else {
-            GetDeviceCaps(dc, LOGPIXELSY as i32).max(96)
-        };
-        if !dc.is_null() {
-            ReleaseDC(null_mut(), dc);
+        if dc.is_null() {
+            return 96;
         }
+        let dpi = GetDeviceCaps(dc, LOGPIXELSY as i32).max(96);
+        ReleaseDC(null_mut(), dc);
+        dpi
+    }
+    unsafe fn new(dpi: i32) -> Self {
+        let dpi = dpi.max(96);
         let make = |size: i32, weight: i32, face: &str| {
             CreateFontW(
                 -size * dpi / 96,
@@ -82,6 +83,27 @@ impl Fonts {
     }
     pub(super) fn px(&self, value: i32) -> i32 {
         value * self.dpi / 96
+    }
+    /// Moves every child of `parent` from `old`'s fonts to the matching font
+    /// of `self`; `old` may be deleted afterwards.
+    unsafe fn reassign(&self, parent: HWND, old: &Fonts) {
+        let mut child = GetWindow(parent, GW_CHILD);
+        while !child.is_null() {
+            let current = SendMessageW(child, WM_GETFONT, 0, 0) as HFONT;
+            let replacement = if current == old.title {
+                self.title
+            } else if current == old.mono {
+                self.mono
+            } else if current == old.normal {
+                self.normal
+            } else {
+                null_mut()
+            };
+            if !replacement.is_null() {
+                SendMessageW(child, WM_SETFONT, replacement as usize, 0);
+            }
+            child = GetWindow(child, GW_HWNDNEXT);
+        }
     }
 }
 impl Drop for Fonts {
@@ -342,7 +364,8 @@ impl App {
 
 struct Host {
     app: RefCell<App>,
-    fonts: Fonts,
+    /// Replaced only by WM_DPICHANGED, never while an App callback runs.
+    fonts: RefCell<Fonts>,
     error: RefCell<Option<String>>,
     studio: bool,
 }
@@ -370,7 +393,9 @@ unsafe fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRES
     if msg == WM_NCCREATE {
         let create = &*(lparam as *const CREATESTRUCTW);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, create.lpCreateParams as isize);
-        return 1;
+        // DefWindowProc stores the caption from CreateWindowExW; returning 1
+        // here directly left every wizard window without a title.
+        return DefWindowProcW(hwnd, msg, wparam, lparam);
     }
     if msg == WM_NCDESTROY {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -390,9 +415,45 @@ unsafe fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRES
         return GetSysColorBrush(COLOR_WINDOW) as isize;
     }
     if msg == WM_GETMINMAXINFO && host.studio {
-        let info = &mut *(lparam as *mut MINMAXINFO);
-        info.ptMinTrackSize.x = host.fonts.px(760);
-        info.ptMinTrackSize.y = host.fonts.px(580);
+        if let Ok(fonts) = host.fonts.try_borrow() {
+            let info = &mut *(lparam as *mut MINMAXINFO);
+            info.ptMinTrackSize.x = fonts.px(760);
+            info.ptMinTrackSize.y = fonts.px(580);
+        }
+        return 0;
+    }
+    if msg == WM_DPICHANGED {
+        // The manifest declares PerMonitorV2: rebuild fonts for the new
+        // monitor, move to the suggested rectangle and re-run the layout.
+        let dpi = ((wparam >> 16) & 0xffff) as i32;
+        let suggested = *(lparam as *const RECT);
+        let rescaled = match host.fonts.try_borrow_mut() {
+            Ok(mut fonts) if fonts.dpi != dpi.max(96) => {
+                let old = std::mem::replace(&mut *fonts, Fonts::new(dpi));
+                fonts.reassign(hwnd, &old);
+                true
+            }
+            _ => false,
+        };
+        SetWindowPos(
+            hwnd,
+            null_mut(),
+            suggested.left,
+            suggested.top,
+            suggested.right - suggested.left,
+            suggested.bottom - suggested.top,
+            SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+        if rescaled {
+            // WM_SIZE is not sent when the suggested size equals the old one.
+            SendMessageW(hwnd, WM_SIZE, SIZE_RESTORED as usize, 0);
+            RedrawWindow(
+                hwnd,
+                null(),
+                null_mut(),
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN,
+            );
+        }
         return 0;
     }
     if !matches!(msg, WM_CREATE | WM_SIZE | WM_COMMAND | WM_TIMER | WM_CLOSE) {
@@ -404,19 +465,23 @@ unsafe fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRES
         let Ok(mut app) = host.app.try_borrow_mut() else {
             return 0;
         };
+        let Ok(fonts) = host.fonts.try_borrow() else {
+            return 0;
+        };
+        let fonts = &*fonts;
         match msg {
-            WM_CREATE => app.init(hwnd, &host.fonts).map(|()| Action::None),
+            WM_CREATE => app.init(hwnd, fonts).map(|()| Action::None),
             WM_SIZE => {
-                app.layout(hwnd, &host.fonts);
+                app.layout(hwnd, fonts);
                 Ok(Action::None)
             }
             WM_COMMAND => app.command(
                 hwnd,
-                &host.fonts,
+                fonts,
                 (wparam & 0xffff) as u16,
                 ((wparam >> 16) & 0xffff) as u16,
             ),
-            WM_TIMER => app.poll(hwnd, &host.fonts),
+            WM_TIMER => app.poll(hwnd, fonts),
             WM_CLOSE => app.close(hwnd),
             _ => Ok(Action::None),
         }
@@ -442,9 +507,93 @@ unsafe fn dispatch(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRES
     0
 }
 
+const COMMON_CONTROLS_V6_MANIFEST: &str = concat!(
+    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+    r#"<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">"#,
+    r#"<dependency><dependentAssembly><assemblyIdentity type="win32" "#,
+    r#"name="Microsoft.Windows.Common-Controls" version="6.0.0.0" "#,
+    r#"processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>"#,
+    r#"</dependentAssembly></dependency></assembly>"#,
+);
+
+/// Activation context selecting ComCtl32 v6 for the UI thread.
+///
+/// The IronSetup binaries (and test harnesses that host this UI) carry no
+/// application manifest, so Windows binds them to the legacy ComCtl32 5.82,
+/// which rejects `ICC_STANDARD_CLASSES` and lacks visual styles. Activating
+/// the dependency at runtime keeps every toolchain (MSVC, MinGW, cross builds)
+/// working without a resource compiler. Failure degrades to ComCtl32 5.x.
+struct CommonControlsV6 {
+    context: HANDLE,
+    cookie: usize,
+}
+impl CommonControlsV6 {
+    unsafe fn activate() -> Option<Self> {
+        use std::io::Write;
+        use windows_sys::Win32::System::ApplicationInstallationAndServicing::{
+            ActivateActCtx, CreateActCtxW, ReleaseActCtx, ACTCTXW,
+        };
+        // CreateActCtxW parses the manifest during the call, so the file is
+        // only needed briefly. create_new refuses a pre-planted file.
+        let path = std::env::temp_dir().join(format!(
+            "ironsetup-comctl6-{}-{}.manifest",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        let written = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .and_then(|mut f| f.write_all(COMMON_CONTROLS_V6_MANIFEST.as_bytes()));
+        if written.is_err() {
+            let _ = std::fs::remove_file(&path);
+            return None;
+        }
+        let source = path_wide(&path);
+        let request = ACTCTXW {
+            cbSize: size_of::<ACTCTXW>() as u32,
+            dwFlags: 0,
+            lpSource: source.as_ptr(),
+            wProcessorArchitecture: 0,
+            wLangId: 0,
+            lpAssemblyDirectory: null(),
+            lpResourceName: null(),
+            lpApplicationName: null(),
+            hModule: null_mut(),
+        };
+        let context = CreateActCtxW(&request);
+        let _ = std::fs::remove_file(&path);
+        if context == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let mut cookie = 0;
+        if ActivateActCtx(context, &mut cookie) == 0 {
+            ReleaseActCtx(context);
+            return None;
+        }
+        Some(Self { context, cookie })
+    }
+}
+impl Drop for CommonControlsV6 {
+    fn drop(&mut self) {
+        use windows_sys::Win32::System::ApplicationInstallationAndServicing::{
+            DeactivateActCtx, ReleaseActCtx,
+        };
+        unsafe {
+            DeactivateActCtx(0, self.cookie);
+            ReleaseActCtx(self.context);
+        }
+    }
+}
+
 unsafe fn run_window(app: App, title: &str, studio: bool) -> Result<()> {
-    // System-DPI aware controls and fonts. Per-monitor DPI transitions are a
-    // documented limitation of this initial native host.
+    // The IronSetup binaries declare PerMonitorV2 in their manifest (see
+    // crates/cli/build.rs) and handle WM_DPICHANGED. This call only applies
+    // to hosts without that manifest (test harnesses, embedders): there it
+    // selects system-DPI awareness; it is a no-op once the manifest set one.
     SetProcessDPIAware();
     let com_result = CoInitializeEx(null(), COINIT_APARTMENTTHREADED as u32);
     struct ComGuard(bool);
@@ -458,12 +607,20 @@ unsafe fn run_window(app: App, title: &str, studio: bool) -> Result<()> {
         }
     }
     let _com = ComGuard(com_result >= 0);
-    let common = INITCOMMONCONTROLSEX {
+    // Must be active before InitCommonControlsEx and before any control is
+    // created, and stay active for the whole message loop.
+    let _visual_styles = CommonControlsV6::activate();
+    let mut common = INITCOMMONCONTROLSEX {
         dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
         dwICC: ICC_PROGRESS_CLASS | ICC_STANDARD_CLASSES,
     };
     if InitCommonControlsEx(&common) == 0 {
-        bail!("Cannot initialize native Windows controls");
+        // ComCtl32 5.x rejects ICC_STANDARD_CLASSES. The standard classes are
+        // registered by user32 there, so only the progress bar is required.
+        common.dwICC = ICC_PROGRESS_CLASS;
+        if InitCommonControlsEx(&common) == 0 {
+            bail!("Cannot initialize native Windows controls");
+        }
     }
     let instance = GetModuleHandleW(null());
     let class = wide("IronSetup.Native.Window.v1");
@@ -487,7 +644,7 @@ unsafe fn run_window(app: App, title: &str, studio: bool) -> Result<()> {
     }
     let mut host = Box::new(Host {
         app: RefCell::new(app),
-        fonts: Fonts::new(),
+        fonts: RefCell::new(Fonts::new(Fonts::system_dpi())),
         error: RefCell::new(None),
         studio,
     });
@@ -501,8 +658,8 @@ unsafe fn run_window(app: App, title: &str, studio: bool) -> Result<()> {
     let mut rect = RECT {
         left: 0,
         top: 0,
-        right: host.fonts.px(width),
-        bottom: host.fonts.px(height),
+        right: host.fonts.borrow().px(width),
+        bottom: host.fonts.borrow().px(height),
     };
     AdjustWindowRect(&mut rect, style, 0);
     let win_width = rect.right - rect.left;
