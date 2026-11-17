@@ -402,6 +402,63 @@ impl Journal {
         )?;
         Ok(())
     }
+    /// Read-only checks before an in-place upgrade uninstalls this journal:
+    /// every installed file that uninstall would remove or restore must be
+    /// openable for writing (a running application holds its files), and no
+    /// item may be one that uninstall would preserve while retaining an
+    /// original backup, because that leaves metadata behind and blocks the new
+    /// installation.
+    pub fn upgrade_preflight(&self, paths: &platform::ContextPaths) -> Result<()> {
+        for record in &self.files {
+            if record.undo_done {
+                continue;
+            }
+            let destination = record.location.resolve_file(paths)?;
+            let label = destination.display().to_string();
+            if !destination.exists() {
+                continue;
+            }
+            if !destination.is_file() {
+                bail!("Cannot upgrade: installed item {label} is no longer a regular file. Nothing was changed");
+            }
+            if !record.retain_on_uninstall {
+                OpenOptions::new()
+                    .write(true)
+                    .open(&destination)
+                    .with_context(|| {
+                        format!(
+                            "Cannot upgrade: {label} cannot be opened for writing. Close {} and any program using its files, then run setup again. Nothing was changed",
+                            self.app.name
+                        )
+                    })?;
+            }
+            if let Some(original) = &record.original {
+                let current = sha256(&bounded_read(&destination)?);
+                let modified = current != record.installed_sha256 && current != original.sha256;
+                if record.retain_on_uninstall || modified {
+                    bail!("Cannot upgrade in place: {label} is modified or marked to keep, and the file it originally replaced is backed up in the installation metadata. Uninstall the previous version first. Nothing was changed");
+                }
+            }
+        }
+        for record in &self.registry {
+            if record.undo_done || !record.remove_on_uninstall || record.previous.is_none() {
+                continue;
+            }
+            let current = platform::get_registry(&record.root, &record.subkey, &record.name)?;
+            if current.is_some()
+                && current != Some(record.installed.clone())
+                && current != record.previous
+            {
+                bail!(
+                    "Cannot upgrade in place: registry value {}\\{} / {} was modified after installation and its previous value is backed up. Uninstall the previous version first. Nothing was changed",
+                    record.root,
+                    record.subkey,
+                    record.name
+                );
+            }
+        }
+        Ok(())
+    }
     pub fn undo(
         &mut self,
         state: &Path,

@@ -380,7 +380,39 @@ fn run_entries_are_explicit_and_conflicting_flags_fail() {
     );
     assert!(compile_error(&extra.replace("{app}\\app.exe", "cmd.exe"))
         .contains("must start with {app}"));
-    assert!(compile_error(&extra.replace("nowait", "postinstall")).contains("Unsupported flag"));
+    assert!(compile_error(&extra.replace("nowait", "shellexec")).contains("Unsupported flag"));
+}
+
+#[test]
+fn postinstall_requires_description_and_lowest_privileges() {
+    let d = fixture();
+    // The NotEdit installer's real entry.
+    let extra = "[Run]\nFilename: \"{app}\\app.exe\"; Description: \"啟動 NotEdit\"; Flags: nowait postinstall skipifsilent\n";
+    let c = compile_script(&script(d.path(), extra), &CompileOptions::default()).unwrap();
+    let run = &c.package.manifest.run[0];
+    assert_eq!(run.description, "啟動 NotEdit");
+    assert_eq!(run.flags, ["nowait", "postinstall", "skipifsilent"]);
+    let error = compile_error(&extra.replace("Description: \"啟動 NotEdit\"; ", ""));
+    assert!(
+        error.contains("test.iss:8") && error.contains("requires a Description"),
+        "{error}"
+    );
+    let admin = d.path().join("admin.iss");
+    fs::write(
+        &admin,
+        format!("{}{extra}", header().replace("=lowest", "=admin")),
+    )
+    .unwrap();
+    let error = compile_script(&admin, &CompileOptions::default())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("admin.iss:8") && error.contains("would start elevated"),
+        "{error}"
+    );
+    let five = "[Run]\n".to_owned()
+        + &"Filename: \"{app}\\app.exe\"; Description: \"Go\"; Flags: postinstall\n".repeat(5);
+    assert!(compile_error(&five).contains("At most 4 postinstall"));
 }
 
 #[test]

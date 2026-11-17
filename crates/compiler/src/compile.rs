@@ -137,7 +137,7 @@ pub fn compile_script(path: &Path, options: &CompileOptions) -> Result<CompiledS
         &default_group,
     )?;
     let registry = compile_registry(&parsed, &component_names, &task_names, &privileges)?;
-    let run = compile_run(&parsed, &component_names, &task_names)?;
+    let run = compile_run(&parsed, &component_names, &task_names, &privileges)?;
     let uninstall_icon = match parsed.setting("uninstalldisplayicon") {
         None => String::new(),
         Some(value) => {
@@ -622,8 +622,10 @@ fn compile_run(
     parsed: &Parsed,
     components: &BTreeSet<String>,
     tasks: &BTreeSet<String>,
+    privileges: &str,
 ) -> Result<Vec<RunEntry>> {
     let mut runs = Vec::new();
+    let mut postinstall = 0usize;
     for entry in parsed.entries("run") {
         entry.allow(&[
             "filename",
@@ -637,7 +639,32 @@ fn compile_run(
         let filename =
             normalize_constants(entry.required("filename")?).map_err(|e| entry.source.error(e))?;
         app_relative(&filename, false).map_err(|e| entry.source.error(e))?;
-        let flags = entry.flags(&["skipifsilent", "nowait", "runhidden", "waituntilterminated"])?;
+        let flags = entry.flags(&[
+            "skipifsilent",
+            "nowait",
+            "runhidden",
+            "waituntilterminated",
+            "postinstall",
+        ])?;
+        if flags.iter().any(|f| f == "postinstall") {
+            if entry.get("description").trim().is_empty() {
+                return Err(entry
+                    .source
+                    .error("postinstall requires a Description for the finish-page checkbox"));
+            }
+            if privileges == "admin" {
+                return Err(entry.source.error(
+                    "postinstall is not supported with PrivilegesRequired=admin; the program would start elevated",
+                ));
+            }
+            postinstall += 1;
+            if postinstall > ironsetup_core::MAX_POSTINSTALL {
+                return Err(entry.source.error(format!(
+                    "At most {} postinstall entries are supported",
+                    ironsetup_core::MAX_POSTINSTALL
+                )));
+            }
+        }
         if flags.iter().any(|f| f == "nowait") && flags.iter().any(|f| f == "waituntilterminated") {
             return Err(entry
                 .source

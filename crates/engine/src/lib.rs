@@ -7,7 +7,7 @@ mod selection;
 use anyhow::{bail, Context, Result};
 use ironsetup_core::{
     evaluate_condition, sha256, validate_relative_path, AppInfo, Conditions, Manifest, Package,
-    Progress, FORMAT_VERSION, MAX_FILES, MAX_PACKAGE_BYTES, STATE_DIR,
+    Progress, RunEntry, FORMAT_VERSION, MAX_FILES, MAX_PACKAGE_BYTES, STATE_DIR,
 };
 use journal::{FileLocation, Journal, JournalStatus, LockGuard};
 pub use selection::default_selections;
@@ -24,6 +24,10 @@ pub struct InstallOptions {
     pub setup_type: Option<String>,
     pub no_run: bool,
     pub silent: bool,
+    /// Interactive hosts set this to leave `postinstall` [Run] entries to the
+    /// finish page (see `run_postinstall`). Ignored in silent mode, where such
+    /// entries run unless they are also `skipifsilent`.
+    pub defer_postinstall: bool,
     pub uninstaller: Option<Vec<u8>>,
 }
 impl InstallOptions {
@@ -35,6 +39,7 @@ impl InstallOptions {
             setup_type: None,
             no_run: false,
             silent: false,
+            defer_postinstall: false,
             uninstaller: None,
         }
     }
@@ -48,6 +53,19 @@ pub struct InstallReport {
     pub selected_components: BTreeSet<String>,
     pub selected_tasks: BTreeSet<String>,
     pub warnings: Vec<String>,
+    /// Version of the same-AppId installation that was replaced in place.
+    pub upgraded_from: Option<String>,
+    /// Indices into `manifest.run` of enabled `postinstall` entries that were
+    /// deferred to the host (finish-page checkboxes) instead of being run.
+    pub postinstall: Vec<usize>,
+}
+#[derive(Debug, Default, Serialize)]
+pub struct PostInstallReport {
+    pub started: Vec<String>,
+    /// Programs that could not start or exited with a non-zero code.
+    pub failures: Vec<String>,
+    /// Informational notes, such as nowait programs whose exit is unknown.
+    pub notes: Vec<String>,
 }
 #[derive(Debug, Default, Serialize)]
 pub struct UninstallReport {
@@ -176,9 +194,17 @@ fn validate_package(package: &Package) -> Result<()> {
         for flag in &entry.flags {
             if !matches!(
                 flag.as_str(),
-                "skipifsilent" | "nowait" | "runhidden" | "waituntilterminated"
+                "skipifsilent" | "nowait" | "runhidden" | "waituntilterminated" | "postinstall"
             ) {
                 bail!("Unsupported Run flag: {flag}");
+            }
+        }
+        if is_postinstall(entry) {
+            if entry.description.trim().is_empty() || entry.description.contains('\0') {
+                bail!("A postinstall Run entry requires a displayable Description");
+            }
+            if m.app.privileges == "admin" {
+                bail!("postinstall Run entries are not supported with PrivilegesRequired=admin; they would start elevated");
             }
         }
         if entry.flags.iter().any(|f| f == "nowait")
@@ -194,8 +220,96 @@ fn validate_package(package: &Package) -> Result<()> {
     Ok(())
 }
 
-/// Install into one application directory. Existing IronSetup installations are
-/// refused rather than performing an unsafe partial upgrade.
+fn is_postinstall(entry: &RunEntry) -> bool {
+    entry.flags.iter().any(|f| f == "postinstall")
+}
+
+/// Files to write and files skipped for one selection, checked against the
+/// current destination state.
+fn plan_files(
+    m: &Manifest,
+    target: &Path,
+    components: &BTreeSet<String>,
+    tasks: &BTreeSet<String>,
+) -> Result<(Vec<usize>, Vec<String>)> {
+    let mut selected = Vec::new();
+    let mut skipped = Vec::new();
+    for (index, entry) in m.files.iter().enumerate() {
+        if !enabled(&entry.conditions, components, tasks)? {
+            skipped.push(entry.path.clone());
+            continue;
+        }
+        let dest = ironsetup_core::checked_join(target, &entry.path)?;
+        if dest.exists() {
+            if !dest.is_file() {
+                bail!("Destination is not a regular file: {}", dest.display());
+            }
+            if entry.flags.iter().any(|f| f == "onlyifdoesntexist") {
+                skipped.push(entry.path.clone());
+                continue;
+            }
+            if fs::metadata(&dest)?.permissions().readonly() {
+                bail!("Refusing to overwrite a read-only file: {}", dest.display());
+            }
+        }
+        selected.push(index);
+    }
+    Ok((selected, skipped))
+}
+
+struct PreviousInstall {
+    version: String,
+    target_created: bool,
+}
+
+/// Decide whether an existing installation may be replaced in place. Read-only:
+/// any refusal leaves the previous installation untouched.
+fn upgrade_preflight(target: &Path, app: &AppInfo) -> Result<PreviousInstall> {
+    let state_dir = target.join(STATE_DIR);
+    ironsetup_core::reject_symlink_ancestors(&state_dir)?;
+    let journal = Journal::load(&state_dir, target).with_context(|| {
+        format!(
+            "An IronSetup installation or pending transaction already exists at {}, but its journal cannot be used for an upgrade. Uninstall it first, or recover an interrupted transaction",
+            target.display()
+        )
+    })?;
+    if journal.status != JournalStatus::Installed {
+        bail!(
+            "An interrupted IronSetup transaction already exists at {}. Run recover before installing again",
+            target.display()
+        );
+    }
+    if journal.app.id != app.id {
+        bail!(
+            "A different application ('{}', AppId {}) already exists at {}. Uninstall it first or choose another folder",
+            journal.app.name,
+            journal.app.id,
+            target.display()
+        );
+    }
+    if !journal.app.uninstallable {
+        bail!(
+            "The installed {} {} was built with Uninstallable=no and cannot be upgraded in place",
+            journal.app.name,
+            journal.app.version
+        );
+    }
+    platform::check_privileges(&journal.app)?;
+    let paths = platform::ContextPaths::new(&journal.app, Some(target.to_path_buf()))?;
+    journal.validate(&state_dir, &paths)?;
+    journal.upgrade_preflight(&paths)?;
+    Ok(PreviousInstall {
+        version: journal.app.version,
+        target_created: journal.target_created,
+    })
+}
+
+/// Install into one application directory. A committed installation of the
+/// same AppId is upgraded in place: the previous version is uninstalled, then
+/// this package is installed. That sequence is not atomic; if the new install
+/// fails after the old version was removed, the old version is not restored.
+/// Every other existing IronSetup state (another AppId, an interrupted
+/// transaction) is refused without changes.
 pub fn install(
     package: &Package,
     options: &InstallOptions,
@@ -254,28 +368,7 @@ pub fn install(
         paths.expand(&entry.value_data)?;
     }
     // Preflight all destinations before creating installation metadata.
-    let mut selected = Vec::new();
-    let mut skipped = Vec::new();
-    for (index, entry) in m.files.iter().enumerate() {
-        if !enabled(&entry.conditions, &components, &tasks)? {
-            skipped.push(entry.path.clone());
-            continue;
-        }
-        let dest = ironsetup_core::checked_join(&target, &entry.path)?;
-        if dest.exists() {
-            if !dest.is_file() {
-                bail!("Destination is not a regular file: {}", dest.display());
-            }
-            if entry.flags.iter().any(|f| f == "onlyifdoesntexist") {
-                skipped.push(entry.path.clone());
-                continue;
-            }
-            if fs::metadata(&dest)?.permissions().readonly() {
-                bail!("Refusing to overwrite a read-only file: {}", dest.display());
-            }
-        }
-        selected.push(index);
-    }
+    let (mut selected, mut skipped) = plan_files(m, &target, &components, &tasks)?;
     for dir in &m.dirs {
         if enabled(&dir.conditions, &components, &tasks)? {
             ironsetup_core::checked_join(&target, &dir.path)?;
@@ -297,10 +390,35 @@ pub fn install(
             }
         }
     }
+    let mut upgrade_warnings = Vec::new();
+    let mut upgraded_from = None;
+    let mut inherited_target_created = false;
     if target.join(STATE_DIR).exists() {
-        bail!("An IronSetup installation or pending transaction already exists at {}. Uninstall it first, or recover an interrupted transaction", target.display());
+        let previous = upgrade_preflight(&target, &m.app)?;
+        let removal = undo_installation(&target, false, progress).with_context(|| {
+            format!(
+                "Upgrade: removing the installed version {} failed; inspect {} and run uninstall or recover",
+                previous.version,
+                target.join(STATE_DIR).display()
+            )
+        })?;
+        if removal.metadata_retained || target.join(STATE_DIR).exists() {
+            bail!("Upgrade: the previous version was uninstalled but its metadata was retained in {}; the new version was not installed. Preserved: {:?}", target.join(STATE_DIR).display(), removal.preserved);
+        }
+        upgrade_warnings.extend(removal.warnings);
+        upgrade_warnings.extend(
+            removal.preserved.iter().map(|p| {
+                format!("Upgrade preserved a modified file from the previous version: {p}")
+            }),
+        );
+        inherited_target_created = previous.target_created;
+        upgraded_from = Some(previous.version);
+        // Destination state changed; re-plan against it.
+        (selected, skipped) = plan_files(m, &target, &components, &tasks).context(
+            "Upgrade: the previous version was removed, but the new version cannot be installed",
+        )?;
     }
-    let target_created = !target.exists();
+    let target_created = inherited_target_created || !target.exists();
     fs::create_dir_all(&target)
         .with_context(|| format!("Create installation directory {}", target.display()))?;
     let target = normalize_target(&target)?;
@@ -332,7 +450,9 @@ pub fn install(
         skipped_files: skipped,
         selected_components: components.clone(),
         selected_tasks: tasks.clone(),
-        warnings: Vec::new(),
+        warnings: upgrade_warnings,
+        upgraded_from,
+        postinstall: Vec::new(),
     };
     let mutation = (|| -> Result<()> {
         for dir in &m.dirs {
@@ -418,29 +538,20 @@ pub fn install(
     // Run actions occur after the transaction commits. Their external effects
     // cannot honestly be rolled back, and failure leaves the installed app usable.
     if !options.no_run {
-        for entry in &m.run {
+        let defer = options.defer_postinstall && !options.silent;
+        for (index, entry) in m.run.iter().enumerate() {
             if !enabled(&entry.conditions, &components, &tasks)?
                 || options.silent && entry.flags.iter().any(|f| f == "skipifsilent")
             {
                 continue;
             }
-            match platform::run_program(entry, &paths) {
-                Ok(Some(code)) if code != 0 => report.warnings.push(format!(
-                    "Post-install program '{}' exited with {code}; installation remains committed",
-                    entry.filename
-                )),
-                Err(error) => report.warnings.push(format!(
-                    "Could not run '{}': {error:#}; installation remains committed",
-                    entry.filename
-                )),
-                _ => (),
+            if defer && is_postinstall(entry) {
+                report.postinstall.push(index);
+                continue;
             }
-            if entry.flags.iter().any(|f| f == "nowait") {
-                report.warnings.push(format!(
-                    "Started '{}' without waiting; its eventual exit status is unknown",
-                    entry.filename
-                ));
-            }
+            let mut notes = Vec::new();
+            run_entry(entry, &paths, &mut report.warnings, &mut notes);
+            report.warnings.extend(notes);
         }
     }
     progress(Progress {
@@ -449,6 +560,94 @@ pub fn install(
         completed: selected.len() as u64,
         total: selected.len() as u64,
     });
+    Ok(report)
+}
+
+/// Returns true when the program was started (its exit status may still be
+/// non-zero). Failures become warnings: the installation remains committed.
+fn run_entry(
+    entry: &RunEntry,
+    paths: &platform::ContextPaths,
+    failures: &mut Vec<String>,
+    notes: &mut Vec<String>,
+) -> bool {
+    let started = match platform::run_program(entry, paths) {
+        Ok(Some(code)) if code != 0 => {
+            failures.push(format!(
+                "Post-install program '{}' exited with {code}; installation remains committed",
+                entry.filename
+            ));
+            true
+        }
+        Err(error) => {
+            failures.push(format!(
+                "Could not run '{}': {error:#}; installation remains committed",
+                entry.filename
+            ));
+            false
+        }
+        _ => true,
+    };
+    if started && entry.flags.iter().any(|f| f == "nowait") {
+        notes.push(format!(
+            "Started '{}' without waiting; its eventual exit status is unknown",
+            entry.filename
+        ));
+    }
+    started
+}
+
+/// Run the `postinstall` [Run] entries the user kept checked on the finish
+/// page. `indices` index `manifest.run`; each must be an enabled postinstall
+/// entry for the given selection, and `target_dir` must hold a committed
+/// installation of this package's AppId. Call from the UI host after the
+/// wizard closes, not from the installation worker.
+pub fn run_postinstall(
+    package: &Package,
+    target_dir: &Path,
+    components: &BTreeSet<String>,
+    tasks: &BTreeSet<String>,
+    indices: &[usize],
+) -> Result<PostInstallReport> {
+    validate_package(package)?;
+    let m = &package.manifest;
+    let mut seen = BTreeSet::new();
+    for index in indices {
+        let entry = m
+            .run
+            .get(*index)
+            .with_context(|| format!("Unknown Run entry index {index}"))?;
+        if !is_postinstall(entry) {
+            bail!("Run entry '{}' is not a postinstall entry", entry.filename);
+        }
+        if !enabled(&entry.conditions, components, tasks)? {
+            bail!(
+                "Run entry '{}' is not enabled for the installed selection",
+                entry.filename
+            );
+        }
+        if !seen.insert(*index) {
+            bail!("Run entry index {index} was requested more than once");
+        }
+    }
+    let installed = installed_app_info(target_dir)?;
+    if installed.id != m.app.id {
+        bail!(
+            "The installation at {} belongs to AppId {}, not {}",
+            target_dir.display(),
+            installed.id,
+            m.app.id
+        );
+    }
+    let target = normalize_target(target_dir)?;
+    let paths = platform::ContextPaths::new(&m.app, Some(target))?;
+    let mut report = PostInstallReport::default();
+    for index in indices {
+        let entry = &m.run[*index];
+        if run_entry(entry, &paths, &mut report.failures, &mut report.notes) {
+            report.started.push(entry.filename.clone());
+        }
+    }
     Ok(report)
 }
 

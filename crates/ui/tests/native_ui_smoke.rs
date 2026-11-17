@@ -6,7 +6,9 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use ironsetup_core::*;
-use ironsetup_ui::{compiler_studio, installer_wizard, WizardSelection};
+use ironsetup_ui::{
+    compiler_studio, installer_wizard, InstallOutcome, PostInstallOption, WizardSelection,
+};
 use std::{
     collections::BTreeSet,
     fs,
@@ -118,7 +120,8 @@ fn fixture() -> Manifest {
         dirs: vec![], components: vec![choice("main", &["full", "minimal"], &["fixed"]), choice("docs", &["full"], &[])],
         tasks: vec![choice("desktop", &[], &[]), docs_task, choice("optional", &[], &["unchecked"])],
         types: vec![SetupType { name: "full".into(), description: "Full".into(), custom: false }, SetupType { name: "minimal".into(), description: "Minimal".into(), custom: false }],
-        icons: vec![], registry: vec![], run: vec![],
+        icons: vec![], registry: vec![],
+        run: ["Launch smoke app", "Open smoke readme"].iter().map(|d| RunEntry { filename: "{app}\\sample.txt".into(), parameters: String::new(), working_dir: String::new(), description: (*d).into(), flags: vec!["postinstall".into()], conditions: Conditions::default() }).collect(),
         license_text: Some("TEST LICENSE\nAccept this fixture license to test the next page.\n繁體中文 Unicode license text.".into()),
         info_before: Some("Local GUI smoke fixture. No real installation takes place.".into()),
         info_after: Some("AFTER-INSTALL INFORMATION retained.".into()),
@@ -219,6 +222,7 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
         command(hwnd, 27, 0);
         title_is(hwnd, "Ready to install")?;
         assert!(get_text(child(hwnd, 13)).contains("Selected files: 1"));
+        assert!(get_text(child(hwnd, 13)).contains("2 offered as options"));
         command(hwnd, 27, 0);
         wait_until("installation callback", || {
             control_started.load(Ordering::Acquire).then_some(())
@@ -232,6 +236,20 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
         let body = get_text(child(hwnd, 13));
         assert!(body.contains("WARNING: smoke warning is preserved"));
         assert!(body.contains("AFTER-INSTALL INFORMATION"));
+        for id in [40, 41] {
+            assert_ne!(
+                IsWindowVisible(child(hwnd, id)),
+                0,
+                "postinstall checkbox {id}"
+            );
+            assert_eq!(
+                SendMessageW(child(hwnd, id), BM_GETCHECK, 0, 0),
+                1, // BST_CHECKED
+                "postinstall entries start checked"
+            );
+        }
+        assert_eq!(get_text(child(hwnd, 40)), "Launch smoke app");
+        SendMessageW(child(hwnd, 41), BM_CLICK, 0, 0);
         screenshot(hwnd, "wizard-complete.bmp")?;
         command(hwnd, 27, 0);
         Ok(())
@@ -261,13 +279,31 @@ fn native_wizard_and_studio_end_to_end() -> Result<()> {
                 completed: 2,
                 total: 2,
             });
-            Ok("TEST CALLBACK COMPLETE\nWARNING: smoke warning is preserved".into())
+            Ok(InstallOutcome {
+                details: "TEST CALLBACK COMPLETE\nWARNING: smoke warning is preserved".into(),
+                postinstall: vec![
+                    PostInstallOption {
+                        index: 0,
+                        description: "Launch smoke app".into(),
+                    },
+                    PostInstallOption {
+                        index: 1,
+                        description: "Open smoke readme".into(),
+                    },
+                ],
+            })
         }),
     );
     driver
         .join()
         .map_err(|_| anyhow!("wizard controller join failed"))??;
-    wizard_result?;
+    let wizard_outcome = wizard_result?;
+    assert_eq!(
+        wizard_outcome.postinstall,
+        vec![0],
+        "only the checked entry is returned"
+    );
+    assert_eq!(wizard_outcome.selection.target_dir, destination);
     let selection = received
         .lock()
         .map_err(|_| anyhow!("poisoned selection mutex"))?

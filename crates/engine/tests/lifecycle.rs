@@ -187,13 +187,15 @@ fn interrupted_transaction_can_be_recovered_without_losing_originals() {
 }
 
 #[test]
-fn repeated_install_is_explicitly_refused() {
+fn repeated_install_of_another_app_id_is_explicitly_refused() {
     let temporary = tempfile::tempdir().unwrap();
     let target = temporary.path().join("app");
     let package = package(&[("app.txt", b"one")]);
     install(&package, &InstallOptions::new(target.clone()), &mut |_| {}).unwrap();
-    let error = install(&package, &InstallOptions::new(target.clone()), &mut |_| {}).unwrap_err();
-    assert!(error.to_string().contains("already exists"));
+    let mut other = package.clone();
+    other.manifest.app.id = "another.application".into();
+    let error = install(&other, &InstallOptions::new(target.clone()), &mut |_| {}).unwrap_err();
+    assert!(error.to_string().contains("already exists"), "{error:#}");
     assert!(verify_install(&target).unwrap().intact);
 }
 

@@ -16,6 +16,8 @@ const FOOTER_LEN: u64 = 56;
 const MAX_MANIFEST: u64 = 16 * 1024 * 1024;
 const MAX_ENCODED: u64 = MAX_PACKAGE_BYTES + 32 * 1024 * 1024;
 const MAX_STUB: u64 = 64 * 1024 * 1024;
+/// Finish-page checkboxes the native wizard can lay out.
+pub const MAX_POSTINSTALL: usize = 4;
 
 pub fn validate_package(package: &Package) -> Result<()> {
     let m = &package.manifest;
@@ -136,9 +138,26 @@ pub fn validate_package(package: &Package) -> Result<()> {
     for x in &m.registry {
         validate_conditions(&x.conditions)?;
     }
+    let mut postinstall = 0usize;
     for x in &m.run {
         validate_conditions(&x.conditions)?;
+        if x.flags.iter().any(|f| f == "postinstall") {
+            postinstall += 1;
+            ensure!(
+                !x.description.trim().is_empty() && !x.description.contains('\0'),
+                "postinstall Run entry {} requires a Description",
+                x.filename
+            );
+            ensure!(
+                m.app.privileges != "admin",
+                "postinstall Run entries are not supported with PrivilegesRequired=admin; they would start elevated"
+            );
+        }
     }
+    ensure!(
+        postinstall <= MAX_POSTINSTALL,
+        "At most {MAX_POSTINSTALL} postinstall Run entries are supported"
+    );
     Ok(())
 }
 fn validate_conditions(c: &crate::Conditions) -> Result<()> {

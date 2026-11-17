@@ -5,7 +5,7 @@ pub mod paths;
 pub mod selection;
 pub use bundle::{
     append_package, decode_package, encode_package, read_embedded_package, read_package_file,
-    stub_bytes, validate_package, write_package_file,
+    stub_bytes, validate_package, write_package_file, MAX_POSTINSTALL,
 };
 pub use ico::{group_icon_resource, parse_ico, parse_uninstall_icon, IcoImage};
 pub use model::*;

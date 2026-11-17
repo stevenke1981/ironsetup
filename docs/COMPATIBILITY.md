@@ -15,9 +15,9 @@
 | Components／Tasks 表達式 | 已實作 | not → and → or 優先序、括號、空白 OR 清單；檢查名稱存在 |
 | `[Icons]` | 已實作子集 | COM ShellLink；群組、使用者桌面／程式選單；目標限應用程式內／解除安裝器 |
 | `[Registry]` | 已實作子集 | HKCU／HKLM／HKA；string、expandsz、dword、qword、binary；uninsdeletevalue |
-| `[Run]` | 已實作子集 | 應用內執行檔、skipifsilent／runhidden／nowait／waituntilterminated |
+| `[Run]` | 已實作子集 | 應用內執行檔、skipifsilent／runhidden／nowait／waituntilterminated／postinstall（需 Description；完成頁勾選框，預設勾選；靜默模式照常執行，除非 skipifsilent；`PrivilegesRequired=admin` 時拒絕；最多 4 項；不支援 unchecked） |
 | `[INI]`／`[InstallDelete]`／`[UninstallDelete]` | 尚未實作 | 編譯時拒絕，避免廣泛刪除或未定義副作用 |
-| `[UninstallRun]`／postinstall／shellexec | 尚未實作 | 編譯時拒絕 |
+| `[UninstallRun]`／shellexec／unchecked | 尚未實作 | 編譯時拒絕 |
 | Pascal `[Code]` | 尚未實作 | 無 Pascal VM／API bridge，編譯時拒絕 |
 | 單一 EXE 安裝檔 | 已實作 | IronSetup stub＋manifest＋壓縮 payload＋trailer |
 | Inno 二進位相容 | 尚未實作 | 無法讀取／轉換 Inno 封裝或 uninstall log |
@@ -31,7 +31,7 @@
 | 安裝檔圖示 | 已實作（僅 Windows 主機） | `SetupIconFile` 驗證 `.ico` 後以 Win32 resource API 嵌入 stub 暫存副本（RT_ICON／RT_GROUP_ICON），再附加 payload；`unins000.exe` 沿用同圖示；非 Windows 主機編譯 EXE 會報錯，`--package-only` 忽略並警告 |
 | Stub CRT | 靜態連結 | MSVC 目標透過 `.cargo/config.toml` 啟用 `crt-static`，`ironsetup-stub.exe` 不匯入 vcruntime140.dll，可在未安裝 VC++ Redistributable 的乾淨電腦執行 |
 | rollback／恢復 | 已實作 | 寫前 journal、備份、鎖、recover；保留未解決的備份 |
-| 原地更新／降版 | 尚未實作 | 既有 journal 明確拒絕；先解除安裝 |
+| 原地更新／降版 | 最小子集 | 同一 AppId 且 journal 為已安裝狀態時：先預檢（每個已安裝檔案可寫入開啟，程式執行中則提示關閉，且不會留下保留備份），再解除安裝舊版、安裝新版；**非原子**：舊版移除後若新版安裝失敗，舊版不會還原。其他 AppId 或未完成交易一律拒絕且不變更。不比較版本號，降版同樣允許 |
 | 刪除使用者修改資料 | 不自動執行 | 使用者修改的 payload 與未擁有檔案保留 |
 | 程式關閉／Restart Manager／重開機置換 | 尚未實作 | 檔案鎖定導致明確失敗／rollback，不強制關閉其他程式 |
 | 網路下載／dependency bootstrapper | 尚未實作 | 本版只處理本地來源 |

@@ -4,7 +4,7 @@ A standalone Rust installer builder with a strict, documented subset of Inno Set
 
 Start with **[README.zh-TW.md](README.zh-TW.md)** for the complete user guide. On Windows, extract the portable ZIP and run **Start-IronSetup.cmd** or **Build-Demo.cmd**. No Rust installation is needed for the prebuilt binaries.
 
-This is v0.1.0, not a full Inno Setup replacement. Unsupported syntax is rejected. Pascal scripts, in-place upgrades, LZMA, Authenticode publishing and multilingual UI are outside this release. Native Windows acceptance is distinguished from Wine and cross-compilation in `evidence/VERIFICATION.md`.
+This is v0.1.0, not a full Inno Setup replacement. Unsupported syntax is rejected. Pascal scripts, atomic upgrades (only a minimal, non-atomic same-AppId in-place upgrade is supported), LZMA, Authenticode publishing and multilingual UI are outside this release. Native Windows acceptance is distinguished from Wine and cross-compilation in `evidence/VERIFICATION.md`.
 
 ```sh
 cargo test --locked --workspace
