@@ -657,7 +657,7 @@ pub(crate) fn uninstall_registration(
         .sum::<u64>()
         .div_ceil(1024)
         .min(u32::MAX as u64);
-    let items = [
+    let mut items = vec![
         ("DisplayName", "string", app.name.clone()),
         ("DisplayVersion", "string", app.version.clone()),
         ("Publisher", "string", app.publisher.clone()),
@@ -672,6 +672,15 @@ pub(crate) fn uninstall_registration(
         ("NoRepair", "dword", "1".into()),
         ("EstimatedSize", "dword", size_kib.to_string()),
     ];
+    if !app.uninstall_icon.is_empty() {
+        let (relative, index) = ironsetup_core::parse_uninstall_icon(&app.uninstall_icon)?;
+        let icon = ironsetup_core::checked_join(target, &relative)?;
+        let mut value = shell_path(&icon);
+        if let Some(index) = index {
+            value.push_str(&format!(",{index}"));
+        }
+        items.push(("DisplayIcon", "string", value));
+    }
     Ok(items
         .into_iter()
         .map(|(name, kind, value)| RegistryEntry {
@@ -778,4 +787,57 @@ fn split_arguments(value: &str) -> Result<Vec<String>> {
         result.push(argument);
     }
     Ok(result)
+}
+
+#[cfg(all(test, windows))]
+mod display_icon_tests {
+    use super::*;
+    fn package(icon: &str) -> Package {
+        Package {
+            manifest: ironsetup_core::Manifest {
+                format_version: 1,
+                app: AppInfo {
+                    id: "x".into(),
+                    name: "X".into(),
+                    version: "1".into(),
+                    publisher: String::new(),
+                    default_dir: "{userpf}\\X".into(),
+                    default_group: "X".into(),
+                    privileges: "lowest".into(),
+                    uninstallable: true,
+                    compression: "zip".into(),
+                    architectures_allowed: String::new(),
+                    uninstall_icon: icon.into(),
+                },
+                files: vec![],
+                dirs: vec![],
+                components: vec![],
+                tasks: vec![],
+                types: vec![],
+                icons: vec![],
+                registry: vec![],
+                run: vec![],
+                license_text: None,
+                info_before: None,
+                info_after: None,
+            },
+            payloads: vec![],
+        }
+    }
+    #[test]
+    fn display_icon_is_emitted_only_when_configured() {
+        let target = Path::new("C:\\Apps\\X");
+        let none = package("");
+        let entries = uninstall_registration(&none.manifest.app, target, &none).unwrap();
+        assert!(entries.iter().all(|e| e.value_name != "DisplayIcon"));
+        let some = package("{app}\\x.exe,1");
+        let entries = uninstall_registration(&some.manifest.app, target, &some).unwrap();
+        let icon = entries
+            .iter()
+            .find(|e| e.value_name == "DisplayIcon")
+            .unwrap();
+        assert_eq!(icon.value_data, "C:\\Apps\\X\\x.exe,1");
+        let bad = package("{app}\\..\\x.exe");
+        assert!(uninstall_registration(&bad.manifest.app, target, &bad).is_err());
+    }
 }

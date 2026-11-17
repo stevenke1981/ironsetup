@@ -39,6 +39,10 @@ pub fn validate_package(package: &Package) -> Result<()> {
         "Unsupported compression: {}",
         m.app.compression
     );
+    if !m.app.uninstall_icon.is_empty() {
+        crate::ico::parse_uninstall_icon(&m.app.uninstall_icon)
+            .context("Invalid UninstallDisplayIcon")?;
+    }
     ensure!(m.files.len() <= MAX_FILES, "Package has too many files");
     ensure!(
         m.files.len() == package.payloads.len(),
@@ -387,6 +391,7 @@ mod tests {
                     uninstallable: true,
                     compression: "zip".into(),
                     architectures_allowed: String::new(),
+                    uninstall_icon: String::new(),
                 },
                 files: vec![ManifestFile {
                     path: "bin/demo.txt".into(),

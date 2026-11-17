@@ -21,6 +21,7 @@ fn package(data: &[u8]) -> Package {
                 uninstallable: true,
                 compression: "zip".into(),
                 architectures_allowed: String::new(),
+                uninstall_icon: String::new(),
             },
             files: vec![ManifestFile {
                 path: "settings.txt".into(),

@@ -113,7 +113,7 @@ fn fixture() -> Manifest {
     docs_task.conditions.components = "docs".into();
     Manifest {
         format_version: FORMAT_VERSION,
-        app: AppInfo { id: "ui-smoke".into(), name: "IronSetup UI Smoke".into(), version: "0.1".into(), publisher: "Local test fixture".into(), default_dir: "{localappdata}\\UiSmoke".into(), default_group: "UiSmoke".into(), privileges: "lowest".into(), uninstallable: true, compression: "zip".into(), architectures_allowed: String::new() },
+        app: AppInfo { id: "ui-smoke".into(), name: "IronSetup UI Smoke".into(), version: "0.1".into(), publisher: "Local test fixture".into(), default_dir: "{localappdata}\\UiSmoke".into(), default_group: "UiSmoke".into(), privileges: "lowest".into(), uninstallable: true, compression: "zip".into(), architectures_allowed: String::new(), uninstall_icon: String::new() },
         files: vec![ManifestFile { path: "sample.txt".into(), size: 9, sha256: sha256(b"test-only"), executable: false, flags: vec![], conditions: Conditions::default() }],
         dirs: vec![], components: vec![choice("main", &["full", "minimal"], &["fixed"]), choice("docs", &["full"], &[])],
         tasks: vec![choice("desktop", &[], &[]), docs_task, choice("optional", &[], &["unchecked"])],

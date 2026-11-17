@@ -169,6 +169,34 @@ fn build(b: &BuildArgs) -> Result<BuildReport> {
             bail!("Stub must be a Windows PE or Linux ELF executable");
         }
     };
+    // SetupIconFile: patch a temporary copy of the stub BEFORE the payload is
+    // appended (the footer derives the stub length). unins000.exe reuses these
+    // stub bytes, so it carries the same icon.
+    let mut warnings = compiled.warnings;
+    let icon_stub;
+    let stub = match (&compiled.setup_icon, &stub) {
+        (Some(icon), Some(stub)) => {
+            ensure!(
+                extension == "exe",
+                "SetupIconFile requires a Windows PE stub; the selected stub is not an .exe"
+            );
+            let ico = std::fs::read(icon)
+                .with_context(|| format!("Cannot read SetupIconFile {}", icon.display()))?;
+            icon_stub = windows::embed_icon(stub, &ico)?;
+            Some(icon_stub.to_path_buf())
+        }
+        (Some(icon), None) => {
+            warnings.push(ironsetup_core::Diagnostic {
+                file: icon.display().to_string(),
+                line: 0,
+                message:
+                    "SetupIconFile is ignored with --package-only (no executable is produced)."
+                        .into(),
+            });
+            None
+        }
+        _ => stub,
+    };
     let output = match &b.output {
         Some(p) => p.clone(),
         None => {
@@ -197,7 +225,7 @@ fn build(b: &BuildArgs) -> Result<BuildReport> {
         files: compiled.package.manifest.files.len(),
         payload_bytes: compiled.package.manifest.files.iter().map(|f| f.size).sum(),
         output_bytes: std::fs::metadata(&output)?.len(),
-        warnings: compiled.warnings,
+        warnings,
     })
 }
 

@@ -7,6 +7,10 @@ pub fn elevate_if_needed(_exe: &Path, _args: &[String]) -> Result<Option<i32>> {
     anyhow::bail!("Administrative Windows installation is unavailable on this platform")
 }
 #[cfg(not(windows))]
+pub fn embed_icon(_stub: &Path, _ico: &[u8]) -> Result<tempfile::TempPath> {
+    anyhow::bail!("SetupIconFile requires a Windows host: icon resources are embedded with the Win32 resource API")
+}
+#[cfg(not(windows))]
 pub fn wait_for_parent(_pid: u32) -> Result<()> {
     Ok(())
 }
@@ -107,6 +111,79 @@ mod native {
             ensure!(ok != 0, "Cannot read elevated installer result");
             Ok(Some(code as i32))
         }
+    }
+    /// Copies the stub (without any appended package) to a temporary file and
+    /// replaces its RT_ICON/RT_GROUP_ICON resources with the given .ico.
+    pub fn embed_icon(stub: &Path, ico: &[u8]) -> Result<tempfile::TempPath> {
+        use std::io::Write;
+        use windows_sys::Win32::System::LibraryLoader::{
+            BeginUpdateResourceW, EndUpdateResourceW, UpdateResourceW,
+        };
+        const RT_ICON: usize = 3;
+        const RT_GROUP_ICON: usize = 14;
+        const GROUP_ID: usize = 1;
+        let images = ironsetup_core::parse_ico(ico)?;
+        let mut temp = tempfile::Builder::new()
+            .prefix("ironsetup-stub-")
+            .suffix(".exe")
+            .tempfile()?;
+        temp.write_all(&ironsetup_core::stub_bytes(stub)?)?;
+        temp.as_file().sync_all()?;
+        // Close our handle: BeginUpdateResource needs the file unshared.
+        let temp = temp.into_temp_path();
+        let path = wide(temp.as_os_str());
+        unsafe {
+            let handle = BeginUpdateResourceW(path.as_ptr(), 0);
+            ensure!(
+                !handle.is_null(),
+                "Cannot open the stub for resource update: {}",
+                std::io::Error::last_os_error()
+            );
+            let mut result: Result<()> = Ok(());
+            for (i, image) in images.iter().enumerate() {
+                if UpdateResourceW(
+                    handle,
+                    RT_ICON as *const u16,
+                    (i + 1) as *const u16,
+                    0,
+                    image.data.as_ptr() as *const _,
+                    image.data.len() as u32,
+                ) == 0
+                {
+                    result = Err(anyhow::anyhow!(
+                        "UpdateResource(RT_ICON) failed: {}",
+                        std::io::Error::last_os_error()
+                    ));
+                    break;
+                }
+            }
+            if result.is_ok() {
+                let group = ironsetup_core::group_icon_resource(&images);
+                if UpdateResourceW(
+                    handle,
+                    RT_GROUP_ICON as *const u16,
+                    GROUP_ID as *const u16,
+                    0,
+                    group.as_ptr() as *const _,
+                    group.len() as u32,
+                ) == 0
+                {
+                    result = Err(anyhow::anyhow!(
+                        "UpdateResource(RT_GROUP_ICON) failed: {}",
+                        std::io::Error::last_os_error()
+                    ));
+                }
+            }
+            // Discard on failure, commit on success.
+            let committed = EndUpdateResourceW(handle, i32::from(result.is_err()));
+            result?;
+            ensure!(
+                committed != 0,
+                "Cannot commit icon resources: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        Ok(temp)
     }
     pub fn wait_for_parent(pid: u32) -> Result<()> {
         unsafe {

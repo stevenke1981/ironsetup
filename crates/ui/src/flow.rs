@@ -98,6 +98,7 @@ mod tests {
                 uninstallable: true,
                 compression: "zip".into(),
                 architectures_allowed: String::new(),
+                uninstall_icon: String::new(),
             },
             files: vec![],
             dirs: vec![],

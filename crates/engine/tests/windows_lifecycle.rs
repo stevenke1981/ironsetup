@@ -130,6 +130,7 @@ fn package(target: &Path, unique: &str) -> Package {
                 uninstallable: true,
                 compression: "zip".into(),
                 architectures_allowed: "x64compatible".into(),
+                uninstall_icon: String::new(),
             },
             files: vec![ManifestFile {
                 path: "app.txt".into(),
